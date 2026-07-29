@@ -1,0 +1,15 @@
+[project]
+name = "42-rag-against-the-machine"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "accelerate>=1.14.0",
+    "bm25s>=0.3.10",
+    "fire>=0.7.1",
+    "pydantic>=2.13.4",
+    "torch>=2.13.0",
+    "tqdm>=4.70.0",
+    "transformers>=5.14.1",
+]

@@ -1,0 +1,15 @@
+.venv/
+venv/
+env/
+.uv/
+
+data/
+
+__pycache__/
+__pycache__
+.mypy_cache/
+
+vllm-0.10.1/
+
+moulinette-fedora
+moulinette-ubuntu
