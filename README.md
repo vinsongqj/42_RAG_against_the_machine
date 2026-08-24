@@ -178,7 +178,7 @@ If you would like to run the program manually, you may input the following comma
       "k": 10
     }
     ```
-    Do be warned that this will take a long time to generate depending on your device specs.
+    *Do be warned that this will take a long time to generate depending on your device specs.*
 
 [↑ Back to Table of Contents](#rag-against-the-machine)
 
