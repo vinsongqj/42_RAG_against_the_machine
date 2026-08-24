@@ -41,18 +41,18 @@ make lint          # Runs mypy and flake8 linting tests
 make lint-strict   # Runs mypy with the --strict flag and flake8
 make clean         # Removes all build files
 ```
-To alter the defaults, please proceed to the Makefile and edit the necessary file paths, k values or queries. The answer commands have been kept separate from the pipeline due to performance incompatability issues with lower end devices, so the run commands are mainly to evaluate recall@k rankings.
+To alter the defaults, please proceed to the Makefile and edit the necessary file paths, k values or queries. The answer commands have been kept separate from the pipeline due to performance incompatibility issues with lower end devices, so the run commands are mainly to evaluate recall@k rankings.
 
 [↑ Back to Table of Contents](#rag-against-the-machine)
 
 ### Manual usage
 If you would like to run the program manually, you may input the following commands in the terminal:
 
-1. Install the dependencies using 
+1. Install the dependencies using: 
    ```bash
    uv sync
    ```
-2. Ingest the data and build the index using 
+2. Ingest the data and build the index using: 
     ```bash
     uv run python -m src index -max_chunk_size <int>
     ```
