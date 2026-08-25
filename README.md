@@ -208,6 +208,11 @@ If you would like to run the program manually, you may input the following comma
 
 ## Resources
 
+* [Dictionary of AI Coding by Matt Pocock (used to understand AI terminologies)](https://www.aicodingdictionary.com/)
+* [Claude Platform Docs - Context Windows (used to learn more about context windows)](https://platform.claude.com/docs/en/build-with-claude/context-windows)
+* [Python Progress Bars with tqdm - Visually Explained by Visually Explained](https://youtu.be/VAoGebgGTdM?si=sk6jt61YAuuFHBsg)
+* [Markdown All in One by Yu Zhang (used for the table of contents)](https://marketplace.visualstudio.com/items?itemName=yzhang.markdown-all-in-one)
+  
 [↑ Back to Table of Contents](#rag-against-the-machine)
 
 ### Disclosure of AI Usage
