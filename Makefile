@@ -74,7 +74,7 @@ clean:
 	@find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
 	@find . -type f -name "*.pyc" -delete
 	@find . -type f -name "*.pyo" -delete
-	@rm -rf data/cache data/processed/bm25_index 2>/dev/null || true
+	@rm -rf data/cache data/output data/processed/bm25_index 2>/dev/null || true
 	@echo "Cleanup done!"
 
 lint:
