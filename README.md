@@ -372,7 +372,7 @@ For example, the word "it" changes meaning based on the context clues the transf
 MiniLM is a modern, CPU-efficient semantic embedding model that converts text using [transformers](#transformer) into 384-dimensional contextual vectors.
 
 ### ChromaDB
-ChromaDB is an open-source vector database used to store, manage and query vector embeddings. It uses a pre-trained [MiniLM](#minilm) model to convert text into vectors and repeats the same process with queries to calculate the distances to the stored vectors in order to find and retrieve closest matches.
+ChromaDB is an open-source vector database used to store, manage and query vector embeddings. It stores the vectors converted by [MiniLM](#minilm) and retrieves the nearest neighbors using cosine similarity.
 
 ### Recall@k
 The percentage of relevant items in the corpus within the top k search results.
