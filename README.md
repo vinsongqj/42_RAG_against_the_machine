@@ -302,7 +302,7 @@ Besides that, the required max chunk size specified for this project is 2000 cha
 ## Challenges faced
 
 * Overcoming the sheer scope of the topic. Machine learning and RAG have many concepts to master and more libraries in Python to learn so the challenge was to cram everything into my brain in as little time possible. I tend to zone out if I take in too much information in one sitting so it was a hurdle to digest everything.
-* Finding the right resources to tackle this topic. This field is full of technical jargon that it's hard for someone not in the know to understand concepts easily.
+* Finding the right resources to tackle this topic. This field is full of technical rabbit holes that it's hard for someone not in the know to locate resources easily.
 
 [↑ Back to Table of Contents](#rag-against-the-machine)
 
