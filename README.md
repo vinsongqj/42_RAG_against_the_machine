@@ -39,7 +39,7 @@
 
 ## Description
 
-**RAG against the machine** is a Retrieval-Augmented Generation (RAG) project pipeline that ingests and indexes a provided codebase, retrieves the most relevant snippets for a question, hands them to a small local model (Qwen3-0.6B) to generate a grounded answer, and measures retrieval quality with recall@k.
+**RAG against the machine** is a Retrieval-Augmented Generation [(RAG)](#retrieval-augmented-generation-rag) project pipeline that ingests and indexes a provided codebase, retrieves the most relevant snippets for a question, hands them to a small local model (Qwen3-0.6B) to generate a grounded answer, and measures retrieval quality with [recall@k](#recallk).
 
 [↑ Back to Table of Contents](#rag-against-the-machine)
 
