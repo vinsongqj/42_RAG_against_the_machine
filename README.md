@@ -21,6 +21,18 @@
   - [Performance analysis](#performance-analysis)
   - [Design decisions](#design-decisions)
   - [Challenges faced](#challenges-faced)
+  - [Glossary](#glossary)
+    - [Retrieval Augmented Generation (RAG)](#retrieval-augmented-generation-rag)
+    - [Corpus](#corpus)
+    - [TF-IDF](#tf-idf)
+    - [BM25](#bm25)
+    - [Semantic embedding](#semantic-embedding)
+    - [Transformer](#transformer)
+    - [MiniLM](#minilm)
+    - [ChromaDB](#chromadb)
+    - [Recall@k](#recallk)
+    - [tqdm](#tqdm)
+    - [Fire](#fire)
   - [Resources](#resources)
     - [Disclosure of AI Usage](#disclosure-of-ai-usage)
 
@@ -263,6 +275,16 @@ flowchart LR
 
 ## Chunking strategy
 
+Instead of directly importing LangChain's libraries I opted to imitate their `RecursiveCharacterTextSplitter` and how they classified their Python and Markdown separators. `RecursiveCharacterTextSplitter` takes `chunk_size: int`, `chunk_overlap: int` and `separators: List[str]`. Based on the highest-priority separator in the list, it splits the text into chunks <= 2000 characters and if a chunk is too large, it will be split based on the next separator in the priority list, with the final fallback being to split by character.
+
+Default separators used: `"\n\n", "\n", " ", ""`
+
+Python separators used: `"\nclass ", "\ndef ", "\n\tdef ", "\n\n", "\n", " ", ""` (Prioritizes `class` and `def` to keep logic intact.)
+
+Markdown separators used: `"\n#{1,6} ", "\n\n", "\n", " ", ""` (Prioritizes headings and paragraphs to preserve document structure.)
+
+Besides that, the required max chunk size specified for this project is 2000 characters, and chunk overlap was set to 200 characters to preserve context between chunks.
+
 [↑ Back to Table of Contents](#rag-against-the-machine)
 
 ## Retrieval method
@@ -279,13 +301,141 @@ flowchart LR
 
 ## Challenges faced
 
+* Overcoming the sheer scope of the topic. Machine learning and RAG have many concepts to master and more libraries in Python to learn so the challenge was to cram everything into my brain in as little time possible. I tend to zone out if I take in too much information in one sitting so it was a hurdle to digest everything.
+* Finding the right resources to tackle this topic. This field is full of technical jargon that it's hard for someone not in the know to understand concepts easily.
+
+[↑ Back to Table of Contents](#rag-against-the-machine)
+
+## Glossary
+
+### Retrieval Augmented Generation (RAG)
+An AI architecture that works by:
+* Ingesting documents and chunking them into smaller segments.
+* Indexing them into vector embeddings and storing them in a vector database.
+* Retrieving a query and vectorizing it, then searching the database for similar chunks.
+* Augmenting the query with the retrieved data and prompting the model to generate a more accurate answer.
+  
+Benefits:
+* Reduces hallucinations by providing more grounded and relevant data.
+* Allows private data to be used without retraining.
+* Only relevant chunks are added to the query, reducing token usage.
+
+### Corpus
+An external database of documents fed into a [RAG](#retrieval-augmented-generation-rag) pipeline.
+
+### TF-IDF
+Term Frequency-Inverse Document Frequency (TF-IDF) scores how important a word is to a specific document within a corpus.
+
+* Term Frequency (TF) - How often a word appears in a specific document. If it appears a lot, it must be important. (e.g: In a cooking article, "recipe" will have a high TF score.)
+* Inverse Document Frequency (IDF) - How rare the word is across all documents in the corpus. If it appears in almost every document it isn't unique or helpful and will be penalised. (e.g: "is" and "the" would have a low IDF score.)
+  
+The final score is TF x IDF.  High scores are assigned to unique words that appear frequently in a specific document, while low scores are assigned to common words found everywhere in the corpus.
+
+Formula:
+
+$\text{TF-IDF}(t, d, D) = \text{TF}(t, d) \times \log\left(\frac{|D|}{1 + |\{d \in D : t \in d\}|}\right)$
+
+> *Disclaimer: This formula is just for reference, I'm not a math major 😭 Fortunately for people like me, Python already has libraries that handle the math in the background.*
+
+### BM25 
+Best Match (25th iteration) builds directly on [TF-IDF](#tf-idf) by fixing its two issues:
+* Issue 1 (Document length) 
+  - There is no consideration for document length, longer documents naturally score higher due to more words and more chances to hit keywords.
+  - BM25 solves this issue by introducing an additional parameter called b (usually 0.75) which measures document length against the average length of all documents in the corpus.
+* Issue 2 (Linear frequency)
+  - Term frequency is linear and there are no diminishing returns. If a word appears 10 times it would have a TF score 10 times higher than if it appeared once.
+  - BM25 solves this issue by adding a capping parameter called k1 (usually 1.2 or 2.0) that controls term frequency saturation so instead of scaling linearly, the score curves and flattens out.
+
+Formula:
+
+$\text{Score}(D, Q) = \sum_{i=1}^{n} \text{IDF}(q_i) \times \frac{f(q_i, D) \cdot (k_1 + 1)}{f(q_i, D) + k_1 \cdot \left(1 - b + b \cdot \frac{|D|}{\text{avgdl}}\right)}$
+
+The bm25s library is used to tokenize, index, retrieve and save/load the data from the disk in this project.
+
+> *Disclaimer: This formula is just for reference, I'm not a math major 😭 Fortunately for people like me, Python already has libraries that handle the math in the background.*
+
+### Semantic embedding
+Keyword retrieval strategies like [BM25](#bm25) or [TF-IDF](#tf-idf) ignore semantic context. Semantic embedding solves this problem by categorizing words into multi-dimensional vectors. 
+
+Context can be calculated based on the proximity of one word's vector coordinates to another. (e.g: "dog" and "canine" would be considered unrelated in BM25, but due to their closeness in vector space, semantic embedding would identify their relationship.)
+
+For this project, a vector index is built using [MiniLM](#minilm) and stored in [ChromaDB](#chromadb).
+
+### Transformer
+A transformer is an AI architecture that processes text in parallel. It reads an entire sentence all at once, instead of word by word. It uses an attention mechanism that acts as a highlighter for context clues within a sentence.
+
+For example, the word "it" changes meaning based on the context clues the transformer highlights:
+* Example A: "The chicken didn't cross the road because it was too tired." (it ➔ chicken is highlighted)
+* Example B: "The chicken didn't cross the road because it was too wide." (it ➔ road is highlighted)
+  
+### MiniLM
+MiniLM is a modern, CPU-efficient semantic embedding model that converts text using [transformers](#transformer) into 384-dimensional contextual vectors.
+
+### ChromaDB
+ChromaDB is an open-source vector database used to store, manage and query vector embeddings. It uses a pre-trained [MiniLM](#minilm) model to convert text into vectors and repeats the same process with queries to calculate the distances to the stored vectors in order to find and retrieve closest matches.
+
+### Recall@k
+The percentage of relevant items in the corpus within the top k search results.
+
+$\text{Recall@k} = \frac{\text{No. of relevant items found in top k}}{\text{Total no. of relevant items in corpus}}$
+
+For example, a database has 10 python files alongside other file types. We are searching for .py files and looking at the top 5 results (k = 5):
+
+$\text{Recall@5} = \frac{\text{4}}{\text{10}}$
+
+* If 4 out of the 5 results are .py files, Recall@5 = 40% (4/10)
+* The remaining 6 .py files are outside the scope of k.
+
+The goal is to achieve the highest Recall@k score with the smallest k possible in order to save system memory.
+
+### tqdm
+tqdm is a function from the tqdm library that wraps an iterable to display a progress bar in the terminal.
+
+Example from `ingester.py`:
+```python
+ for file_path in tqdm(files, desc="Ingesting files"):
+```
+CLI Output:
+```
+      Percentage to completion                 No. of tasks completed        Iterations/sec
+                  │                                       │                         │ 
+Ingesting files: 100%|███████████████████████████████| 3226/3226 [00:01<00:00, 1998.00it/s]
+                                     │                                 │            
+                               Progress bar                Elapsed time/Est time left
+```
+
+### Fire
+Python Fire is an open-source CLI tool created by Google that exposes classes, functions or variables as executable CLI commands without the need for manually writing parsing code.
+
+For example, the function `index` is exposed using a dictionary passed into `fire.Fire()` in `__main__.py`:
+
+```python
+if __name__ == "__main__":
+    fire.Fire({
+        "index": index,
+        "search": search,
+        "search_dataset": search_dataset,
+        "answer": answer,
+        "answer_dataset": answer_dataset,
+        "evaluate": evaluate,
+        "api": run_api
+    })
+```
+This allows you to call `index` directly from the CLI using `uv run python -m src index`. Do note that this can only run because `__main__.py` is executed in the module `src`.
+
 [↑ Back to Table of Contents](#rag-against-the-machine)
 
 ## Resources
 
 * [Dictionary of AI Coding by Matt Pocock (used to understand AI terminologies)](https://www.aicodingdictionary.com/)
-* [What is a Context Window? Unlocking LLM Secrets by IBM Technology](https://youtu.be/-QVoIxEpFkM)
-* [Claude Platform Docs - Context Windows (used to learn more about context windows)](https://platform.claude.com/docs/en/build-with-claude/context-windows)
+* [TFIDF: Data Science Concepts by ritvikmath](https://youtu.be/OymqCnh-APA?si=vrCQdNuxBp7rAyPQ)
+* [BM25 : The Most Important Text Metric in Data Science by ritvikmath](https://youtu.be/ruBm9WywevM)
+* [The 5 Levels Of Text Splitting For Retrieval by Greg Kamradt](https://youtu.be/8OJC21T2SL4?si=x5KsyhCeyv9V-rEh)
+* [LangChain's GitHub](https://github.com/langchain-ai/langchain/blob/master/libs/text-splitters/langchain_text_splitters/character.py)
+* [Learn Text Embeddings in 20 Minutes (full guide for beginners) by Thu Vu](https://youtu.be/Q6TBHDgWCDQ)
+* [What are Transformers (Machine Learning Model)? by IBM Technology](https://youtu.be/ZXiruGOCn9s)
+* [Getting Started with ChromaDB - Lowest Learning Curve Vector Database For Semantic Search by Johnny Code](https://youtu.be/QSW2L8dkaZk)
+* [Never Forget Again! // Precision vs Recall with a Clear Example of Precision and Recall by Kimberly Fessel](https://youtu.be/qWfzIYCvBqo)
 * [Python Progress Bars with tqdm - Visually Explained by Visually Explained](https://youtu.be/VAoGebgGTdM?si=sk6jt61YAuuFHBsg)
 * [Markdown All in One by Yu Zhang (used for the table of contents)](https://marketplace.visualstudio.com/items?itemName=yzhang.markdown-all-in-one)
   
@@ -293,6 +443,6 @@ flowchart LR
 
 ### Disclosure of AI Usage
 
-DeepSeek was used to answer some more in-depth questions I had about chunking and retrieval, as well as error handling and finding edge cases in my pipeline, while Gemini was used for asking basic questions about topics such as tqdm, Fire CLI and how to include a table of contents in my readme.
+DeepSeek was used to answer some more in-depth questions I had about chunking and retrieval, as well as error handling and finding edge cases in my pipeline, while Gemini was used for asking basic questions about topics such as tqdm and Fire CLI to make sure my glossary was acceptable, and how to include a table of contents, flowchart and LaTeX math in my readme.
 
 [↑ Back to Table of Contents](#rag-against-the-machine)
