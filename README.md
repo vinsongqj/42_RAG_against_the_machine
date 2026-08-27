@@ -324,7 +324,7 @@ Benefits:
 An external database of documents fed into a [RAG](#retrieval-augmented-generation-rag) pipeline.
 
 ### TF-IDF
-Term Frequency-Inverse Document Frequency (TF-IDF) scores how important a word is to a specific document within a corpus.
+Term Frequency-Inverse Document Frequency (TF-IDF) is a ranking algorithm scores how important a word is to a specific document within a corpus.
 
 * Term Frequency (TF) - How often a word appears in a specific document. If it appears a lot, it must be important. (e.g: In a cooking article, "recipe" will have a high TF score.)
 * Inverse Document Frequency (IDF) - How rare the word is across all documents in the corpus. If it appears in almost every document it isn't unique or helpful and will be penalised. (e.g: "is" and "the" would have a low IDF score.)
