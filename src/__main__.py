@@ -13,11 +13,12 @@ from src.indexer import build_index
 from src.retriever import retrieve, _get_retriever
 from src.generator import generate_answer
 from src.evaluator import compute_recall
+from src.api import run_api
 
 
 def index(max_chunk_size: int = 2000,
-         raw_dir: str = "data/raw",
-         processed_dir: str = "data/processed"):
+          raw_dir: str = "data/raw",
+          processed_dir: str = "data/processed"):
     """Ingest raw_dir and build BM25 index under processed_dir."""
     build_index(raw_dir, processed_dir, max_chunk_size)
 
@@ -154,4 +155,5 @@ if __name__ == "__main__":
         "answer": answer,
         "answer_dataset": answer_dataset,
         "evaluate": evaluate,
+        "api": run_api
     })
