@@ -50,3 +50,4 @@ class CodeChunk(BaseModel):
     first_character_index: int
     last_character_index: int
     score: Optional[float] = None
+    bm25_text: Optional[str] = None

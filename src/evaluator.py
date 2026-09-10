@@ -1,12 +1,13 @@
 import json
-from pathlib import Path
-from typing import List
+from typing import List, Optional
 from src.models import AnsweredQuestion, StudentSearchResults, MinimalSource
 
 
-def compute_recall(student_search_results_path: str,
-                   dataset_path: str,
-                   k: int = None) -> float:
+def compute_recall(
+    student_search_results_path: str,
+    dataset_path: str,
+    k: Optional[int] = None,
+) -> float:
     """
     Compute recall@k for the student search results against ground truth dataset.
     Returns average recall over all questions.

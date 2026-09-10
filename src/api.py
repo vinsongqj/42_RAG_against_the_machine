@@ -1,11 +1,8 @@
 """Local HTTP API for the RAG system."""
 
-import json
-from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from fastapi import FastAPI, Query, HTTPException
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import uvicorn
 
@@ -56,8 +53,20 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Global state
-_index_loaded = False
+
+def _check_index_loaded() -> bool:
+    """Try loading the (cached) BM25 index and report whether it succeeded.
+
+    Both health endpoints previously duplicated this try/except and the
+    ``/health`` route always returned the stale module-level flag from
+    before ``/`` was ever hit, so it reported False even with a valid index.
+    """
+    try:
+        from src.retriever import _get_retriever
+        _get_retriever()
+        return True
+    except Exception:
+        return False
 
 
 # ============================================================================
@@ -65,28 +74,19 @@ _index_loaded = False
 # ============================================================================
 
 @app.get("/", response_model=HealthResponse)
-async def root():
+async def root() -> HealthResponse:
     """Health check endpoint."""
-    global _index_loaded
-    try:
-        # Try to load index (cached)
-        from src.retriever import _get_retriever
-        _get_retriever()
-        _index_loaded = True
-    except Exception:
-        _index_loaded = False
-    return HealthResponse(status="ok", index_loaded=_index_loaded)
+    return HealthResponse(status="ok", index_loaded=_check_index_loaded())
 
 
 @app.get("/health", response_model=HealthResponse)
-async def health():
+async def health() -> HealthResponse:
     """Health check endpoint."""
-    global _index_loaded
-    return HealthResponse(status="ok", index_loaded=_index_loaded)
+    return HealthResponse(status="ok", index_loaded=_check_index_loaded())
 
 
 @app.post("/search", response_model=SearchResponse)
-async def api_search(request: SearchRequest):
+async def api_search(request: SearchRequest) -> SearchResponse:
     """
     Search the index and return top-k sources for a query.
     """
@@ -103,11 +103,11 @@ async def api_search(request: SearchRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/search")
+@app.get("/search", response_model=SearchResponse)
 async def api_search_get(
     query: str = Query(..., description="Search query"),
     k: int = Query(5, description="Number of results to return", ge=1, le=50)
-):
+) -> SearchResponse:
     """Search the index (GET version)."""
     try:
         sources = retrieve(query, k=k)
@@ -119,7 +119,7 @@ async def api_search_get(
 
 
 @app.post("/answer", response_model=AnswerResponse)
-async def api_answer(request: AnswerRequest):
+async def api_answer(request: AnswerRequest) -> AnswerResponse:
     """
     Generate an answer for a query using retrieved context.
     """
@@ -138,11 +138,11 @@ async def api_answer(request: AnswerRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/answer")
+@app.get("/answer", response_model=AnswerResponse)
 async def api_answer_get(
     query: str = Query(..., description="Question to answer"),
     k: int = Query(5, description="Number of sources to retrieve", ge=1, le=50)
-):
+) -> AnswerResponse:
     """Generate an answer (GET version)."""
     try:
         sources = retrieve(query, k=k)
@@ -163,10 +163,10 @@ async def api_answer_get(
 # CLI Entry Point
 # ============================================================================
 
-def run_api(host: str = "0.0.0.0", port: int = 8000, reload: bool = False):
+def run_api(host: str = "0.0.0.0", port: int = 8000, reload: bool = False) -> None:
     """Run the API server."""
-    print(f"🚀 Starting RAG API server on http://{host}:{port}")
-    print(f"📚 Documentation available at http://{host}:{port}/docs")
+    print(f"Starting RAG API server on http://{host}:{port}")
+    print(f"Documentation available at http://{host}:{port}/docs")
     uvicorn.run("src.api:app", host=host, port=port, reload=reload)
 
 

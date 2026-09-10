@@ -1,19 +1,19 @@
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from typing import List
+from typing import Any, List, Optional, Tuple
 from src.models import MinimalSource
 
 MODEL_ID = "Qwen/Qwen3-0.6B"
-tokenizer = None
-model = None
+tokenizer: Optional[Any] = None
+model: Optional[Any] = None
 
 
-def _load_model():
+def _load_model() -> Tuple[Any, Any]:
     global tokenizer, model
     if tokenizer is None:
         print(f"Loading model {MODEL_ID}...")
         tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-        
+
         # Optimize for CPU
         model = AutoModelForCausalLM.from_pretrained(
             MODEL_ID,
@@ -21,21 +21,23 @@ def _load_model():
             device_map="cpu",
             low_cpu_mem_usage=True,
         )
-        
+
         # Set to evaluation mode
         model.eval()
-        
+
         # Optimize for CPU inference
         if hasattr(model, "config") and hasattr(model.config, "use_cache"):
             model.config.use_cache = True  # Enable KV cache
-        
+
         print("Model loaded!")
     return tokenizer, model
 
 
-def generate_answer(question: str,
-                    sources: List[MinimalSource],
-                    max_new_tokens: int = 128) -> str:
+def generate_answer(
+    question: str,
+    sources: List[MinimalSource],
+    max_new_tokens: int = 128,
+) -> str:
     """
     Generate an answer grounded in the provided sources using the Qwen model.
     Sources must contain file_path and character range; we read the actual content
@@ -90,4 +92,4 @@ Answer:
     # Decode only new tokens
     output_ids = generated_ids[0][inputs.input_ids.shape[1]:]
     answer = tokenizer.decode(output_ids, skip_special_tokens=True)
-    return answer.strip()
+    return str(answer).strip()
