@@ -1,4 +1,5 @@
 import torch
+import sys
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from typing import Any, List, Optional, Tuple
 from src.models import MinimalSource
@@ -8,45 +9,33 @@ tokenizer: Optional[Any] = None
 model: Optional[Any] = None
 
 
-def _load_model() -> Tuple[Any, Any]:
+def _load_model():
     global tokenizer, model
     if tokenizer is None:
-        print(f"Loading model {MODEL_ID}...")
+        print(f"Loading model {MODEL_ID}...", file=sys.stderr)
         tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-
-        # Optimize for CPU
         model = AutoModelForCausalLM.from_pretrained(
             MODEL_ID,
-            dtype=torch.float32,  # float32 is faster on CPU than float16
+            dtype=torch.float32,
             device_map="cpu",
             low_cpu_mem_usage=True,
         )
-
-        # Set to evaluation mode
         model.eval()
-
-        # Optimize for CPU inference
         if hasattr(model, "config") and hasattr(model.config, "use_cache"):
-            model.config.use_cache = True  # Enable KV cache
-
-        print("Model loaded!")
+            model.config.use_cache = True
+        print("Model loaded!", file=sys.stderr)
     return tokenizer, model
 
 
 def generate_answer(
     question: str,
     sources: List[MinimalSource],
-    max_new_tokens: int = 128,
+    max_new_tokens: int = 200,
 ) -> str:
-    """
-    Generate an answer grounded in the provided sources using the Qwen model.
-    Sources must contain file_path and character range; we read the actual content
-    from the original files to include in the prompt.
-    """
+    """Generate an answer grounded in the provided sources using Qwen."""
     if not sources:
         return "No relevant sources retrieved."
-
-    # Build context from sources (read the actual file content)
+    
     context_parts = []
     for src in sources:
         try:
@@ -54,42 +43,53 @@ def generate_answer(
                 content = f.read()
         except Exception:
             content = f"[Could not read file: {src.file_path}]"
-        # Slice the exact span
         snippet = content[src.first_character_index:src.last_character_index]
-        context_parts.append(f"File: {src.file_path}\n```\n{snippet}\n```")
+        snippet = snippet.replace("```", "")
+        context_parts.append(f"File: {src.file_path}\n{snippet}")
 
     context = "\n\n".join(context_parts)
+    if len(context) > 6000:
+        context = context[:6000] + "\n...[truncated]"
 
-    # Truncate context if too long (rough token estimation)
-    # Approx 4 chars per token, we leave room for system+user prompt and answer
-    max_context_chars = 3000  # adjust based on model's context window
-    if len(context) > max_context_chars:
-        context = context[:max_context_chars] + "\n...[truncated]"
+    system_msg = (
+        "You are a documentation assistant. Answer the user's question in "
+        "1-3 sentences of plain prose, using only the provided context. "
+        "Do not ask questions. Do not offer options. Do not use lists, "
+        "Markdown, or code fences. If the context does not contain the "
+        "answer, reply exactly: 'The context does not contain the answer.'"
+    )
+    user_msg = f"Context:\n{context}\n\nQuestion: {question}\n\nAnswer:"
 
-    # Build prompt
-    prompt = f"""
-You are a precise technical assistant for software codebases.
-Answer the question based solely on the provided context.
-If the context does not contain the answer, say so.
-
-Context:
-{context}
-
-Question: {question}
-
-Answer:
-"""
     tokenizer, model = _load_model()
+
+    messages = [
+        {"role": "system", "content": system_msg},
+        {"role": "user", "content": user_msg},
+    ]
+    prompt = tokenizer.apply_chat_template(
+        messages,
+        tokenize=False,
+        add_generation_prompt=True,
+        enable_thinking=False,
+    )
+
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
     with torch.no_grad():
         generated_ids = model.generate(
             **inputs,
             max_new_tokens=max_new_tokens,
-            temperature=0.1,
-            top_p=0.8,
-            do_sample=True,
+            do_sample=False,
+            repetition_penalty=1.3,
+            pad_token_id=tokenizer.eos_token_id,
         )
-    # Decode only new tokens
+
     output_ids = generated_ids[0][inputs.input_ids.shape[1]:]
-    answer = tokenizer.decode(output_ids, skip_special_tokens=True)
-    return str(answer).strip()
+    answer = tokenizer.decode(output_ids, skip_special_tokens=True).strip()
+
+    # Trim any trailing reasoning/follow-up the model tacked on.
+    for marker in ("\n\nQuestion:", "\n\nOptions:", "\nAnswer:", "\n```"):
+        if marker in answer:
+            answer = answer.split(marker, 1)[0]
+    answer = answer.replace("```", "").strip()
+
+    return answer or "No answer generated."

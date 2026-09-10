@@ -1,14 +1,14 @@
 import hashlib
-from pathlib import Path
-from typing import Any, Optional
 import pickle
+from pathlib import Path
+from typing import Any, Dict, Optional
 
 
 class QueryCache:
-    def __init__(self, cache_dir: str = "data/cache"):
+    def __init__(self, cache_dir: str = "data/cache") -> None:
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.memory_cache = {}
+        self.memory_cache: Dict[str, Any] = {}
 
     def _key_to_filename(self, key: str) -> str:
         """Convert a key to a safe filename using MD5 hash."""
@@ -29,7 +29,7 @@ class QueryCache:
                 return result
         return None
 
-    def set(self, key: str, value: Any):
+    def set(self, key: str, value: Any) -> None:
         self.memory_cache[key] = value
         filename = self._key_to_filename(key)
         cache_file = self.cache_dir / f"{filename}.pkl"
@@ -38,7 +38,7 @@ class QueryCache:
         with open(cache_file, "wb") as f:
             pickle.dump(value, f)
 
-    def clear(self):
+    def clear(self) -> None:
         self.memory_cache.clear()
         for f in self.cache_dir.glob("*.pkl"):
             f.unlink()

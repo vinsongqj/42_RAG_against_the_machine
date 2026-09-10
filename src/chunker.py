@@ -137,23 +137,24 @@ _MD_HEADER_BOUNDARY_RE = re.compile(r"(?=\n#{1,6}[ \t])")
 
 
 def chunk_markdown(content: str, file_path: str, chunk_size: int = 1200) -> List[CodeChunk]:
-    """Split Markdown on header boundaries.
+    """Split Markdown on header boundaries, then merge undersized sections forward.
 
-    Key properties (each one fixes a specific recall loss):
+    Two properties matter for recall:
 
-    * Sections are NEVER merged across header boundaries.  Merging two
-      adjacent H2 sections dilutes IoU with a ground-truth span that lives
-      under only one of them (the earlier version did exactly this via
-      ``merge_pieces(pieces)``).
+    * Sections are split at every header boundary (not merged wholesale the
+      way the very first version did, which diluted IoU with short spans).
 
-    * Within a single large section, the fallback splitter's own overlap is
-      used, so sentences that span a sub-chunk boundary still appear in one
-      of the neighbouring chunks.
+    * A section whose own body is short is then merged forward into the
+      next section.  A "# Supported Models" header followed by two lines of
+      prose and then a child section with the actual model table was
+      previously emitted as a ~280-char stub that BM25 could not score
+      above unrelated files; merging it into the child section gives one
+      chunk with both the intro *and* the list.
 
-    * The header *trail* (e.g. "Guide > Installation > macOS") is prepended
-      to ``bm25_text`` for BM25 only.  Stored ``content`` and the character
-      offsets remain exactly what is on disk, so ``generate_answer`` can
-      still slice the raw file correctly.
+    * The header trail ("Guide > Installation > macOS") is prepended to
+      ``bm25_text`` for BM25 only.  Stored content and character offsets
+      remain exactly what is on disk, so ``generate_answer`` still slices
+      the raw file correctly.
     """
     fallback_splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
@@ -161,19 +162,20 @@ def chunk_markdown(content: str, file_path: str, chunk_size: int = 1200) -> List
         separators=["\n\n", "\n", " ", ""],
     )
 
-    sections = _MD_HEADER_BOUNDARY_RE.split(content)
-    sections = [s.lstrip("\n") for s in sections if s.strip()]
+    # Raw sections are contiguous substrings of `content` (the lookahead
+    # split consumes nothing), so concatenating adjacent sections still
+    # reproduces the original text — required for _to_chunks() to locate
+    # merged chunks via content.find().  Do NOT lstrip here.
+    raw_sections = _MD_HEADER_BOUNDARY_RE.split(content)
+    raw_sections = [s for s in raw_sections if s.strip()]
 
+    # Pass 1: tag each section with its header level and cumulative trail.
     header_stack: List[Tuple[int, str]] = []
-    pieces: List[str] = []
-    bm25_texts: List[str] = []
-
-    for section in sections:
-        # Only the first line of a section can be its own header (that's
-        # what the lookahead split produced).  Using .match here — not
-        # finditer — avoids mistaking a "# comment" inside a fenced code
-        # block on some later line for a real Markdown header.
-        first_line = section.split("\n", 1)[0]
+    tagged: List[Tuple[int, str, str, str]] = []  # level, title, text, trail
+    for section in raw_sections:
+        # Sections may begin with a "\n" (kept intact above); strip it for
+        # header detection only.
+        first_line = section.lstrip("\n").split("\n", 1)[0]
         m = _HEADER_LINE_RE.match(first_line)
         if m:
             level = len(m.group(1))
@@ -181,17 +183,47 @@ def chunk_markdown(content: str, file_path: str, chunk_size: int = 1200) -> List
             while header_stack and header_stack[-1][0] >= level:
                 header_stack.pop()
             header_stack.append((level, title))
-
-        trail = " > ".join(t for _, t in header_stack)
-        prefix = f"{trail}: " if trail else ""
-
-        if len(section) <= chunk_size:
-            pieces.append(section)
-            bm25_texts.append(prefix + section)
         else:
-            # Merge sub-chunks of THIS section only — never with siblings.
+            # Non-header section inherits the current trail; its "level" is
+            # the depth of the open header, for the merge check below.
+            level = header_stack[-1][0] if header_stack else 0
+            title = ""
+        trail = " > ".join(t for _, t in header_stack)
+        tagged.append((level, title, section, trail))
+
+    # Pass 2: greedy merge.  A section that would otherwise produce an
+    # undersized chunk absorbs the following section.  Only undersized
+    # sections trigger this, so large sections stay separate and the
+    # earlier fix (no merging across headers) remains in effect for them.
+    MIN_SECTION_CHARS = 500
+    merged: List[Tuple[int, str, str, str]] = []
+    buffer: Optional[Tuple[int, str, str, str]] = None
+    for level, title, text, trail in tagged:
+        if buffer is None:
+            buffer = (level, title, text, trail)
+        elif len(buffer[2]) < MIN_SECTION_CHARS:
+            # Merge the new section into the buffer.  Use the newer trail
+            # so bm25_text reflects the most specific header.
+            buffer = (buffer[0], buffer[1], buffer[2] + text, trail)
+        else:
+            merged.append(buffer)
+            buffer = (level, title, text, trail)
+    if buffer is not None:
+        merged.append(buffer)
+
+    # Pass 3: emit pieces.  Anything larger than chunk_size is further
+    # split by the fallback splitter; every piece gets the header-trail
+    # prefix added to bm25_text only (not to stored content).
+    pieces: List[str] = []
+    bm25_texts: List[str] = []
+    for _level, _title, text, trail in merged:
+        prefix = f"{trail}: " if trail else ""
+        if len(text) <= chunk_size:
+            pieces.append(text)
+            bm25_texts.append(prefix + text)
+        else:
             sub_merged = fallback_splitter.merge_pieces(
-                fallback_splitter.split_text(section)
+                fallback_splitter.split_text(text)
             )
             for sub in sub_merged:
                 pieces.append(sub)
@@ -201,7 +233,6 @@ def chunk_markdown(content: str, file_path: str, chunk_size: int = 1200) -> List
         content, file_path, fallback_splitter,
         texts=pieces, bm25_texts=bm25_texts,
     )
-
 
 # ============================================================================
 # Shared helper

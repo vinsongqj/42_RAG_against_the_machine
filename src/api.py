@@ -18,22 +18,26 @@ from src.models import MinimalSource
 class SearchRequest(BaseModel):
     query: str
     k: int = 5
+    method: str = "bm25"  # "bm25" | "semantic" | "hybrid"
 
 
 class SearchResponse(BaseModel):
     query: str
     k: int
+    method: str
     sources: List[MinimalSource]
 
 
 class AnswerRequest(BaseModel):
     query: str
     k: int = 5
+    method: str = "bm25"  # "bm25" | "semantic" | "hybrid"
 
 
 class AnswerResponse(BaseModel):
     query: str
     k: int
+    method: str
     sources: List[MinimalSource]
     answer: str
 
@@ -41,6 +45,8 @@ class AnswerResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     index_loaded: bool
+    bm25_index_loaded: bool
+    semantic_index_loaded: bool
 
 
 # ============================================================================
@@ -54,19 +60,41 @@ app = FastAPI(
 )
 
 
-def _check_index_loaded() -> bool:
-    """Try loading the (cached) BM25 index and report whether it succeeded.
-
-    Both health endpoints previously duplicated this try/except and the
-    ``/health`` route always returned the stale module-level flag from
-    before ``/`` was ever hit, so it reported False even with a valid index.
-    """
+def _check_bm25_loaded() -> bool:
     try:
         from src.retriever import _get_retriever
         _get_retriever()
         return True
     except Exception:
         return False
+
+
+def _check_semantic_loaded() -> bool:
+    try:
+        from vector_indexer import _get_collection
+        _get_collection("data/processed")
+        return True
+    except Exception:
+        return False
+
+
+def _health_response() -> HealthResponse:
+    """Check whether the (cached) BM25 and semantic indexes can be loaded.
+
+    Both health endpoints previously duplicated this try/except and the
+    ``/health`` route always returned the stale module-level flag from
+    before ``/`` was ever hit, so it reported False even with a valid
+    index. Now checked live and reported per-index, since the semantic
+    index (Bonus 1) is optional and may not exist even when BM25 does.
+    """
+    bm25_loaded = _check_bm25_loaded()
+    semantic_loaded = _check_semantic_loaded()
+    return HealthResponse(
+        status="ok",
+        index_loaded=bm25_loaded or semantic_loaded,
+        bm25_index_loaded=bm25_loaded,
+        semantic_index_loaded=semantic_loaded,
+    )
 
 
 # ============================================================================
@@ -76,13 +104,13 @@ def _check_index_loaded() -> bool:
 @app.get("/", response_model=HealthResponse)
 async def root() -> HealthResponse:
     """Health check endpoint."""
-    return HealthResponse(status="ok", index_loaded=_check_index_loaded())
+    return _health_response()
 
 
 @app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     """Health check endpoint."""
-    return HealthResponse(status="ok", index_loaded=_check_index_loaded())
+    return _health_response()
 
 
 @app.post("/search", response_model=SearchResponse)
@@ -91,14 +119,17 @@ async def api_search(request: SearchRequest) -> SearchResponse:
     Search the index and return top-k sources for a query.
     """
     try:
-        sources = retrieve(request.query, k=request.k)
+        sources = retrieve(request.query, k=request.k, method=request.method)
         return SearchResponse(
             query=request.query,
             k=request.k,
+            method=request.method,
             sources=sources
         )
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -106,14 +137,17 @@ async def api_search(request: SearchRequest) -> SearchResponse:
 @app.get("/search", response_model=SearchResponse)
 async def api_search_get(
     query: str = Query(..., description="Search query"),
-    k: int = Query(5, description="Number of results to return", ge=1, le=50)
+    k: int = Query(5, description="Number of results to return", ge=1, le=50),
+    method: str = Query("bm25", description="bm25 | semantic | hybrid"),
 ) -> SearchResponse:
     """Search the index (GET version)."""
     try:
-        sources = retrieve(query, k=k)
-        return SearchResponse(query=query, k=k, sources=sources)
+        sources = retrieve(query, k=k, method=method)
+        return SearchResponse(query=query, k=k, method=method, sources=sources)
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -124,16 +158,19 @@ async def api_answer(request: AnswerRequest) -> AnswerResponse:
     Generate an answer for a query using retrieved context.
     """
     try:
-        sources = retrieve(request.query, k=request.k)
+        sources = retrieve(request.query, k=request.k, method=request.method)
         answer_text = generate_answer(request.query, sources)
         return AnswerResponse(
             query=request.query,
             k=request.k,
+            method=request.method,
             sources=sources,
             answer=answer_text
         )
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -141,20 +178,24 @@ async def api_answer(request: AnswerRequest) -> AnswerResponse:
 @app.get("/answer", response_model=AnswerResponse)
 async def api_answer_get(
     query: str = Query(..., description="Question to answer"),
-    k: int = Query(5, description="Number of sources to retrieve", ge=1, le=50)
+    k: int = Query(5, description="Number of sources to retrieve", ge=1, le=50),
+    method: str = Query("bm25", description="bm25 | semantic | hybrid"),
 ) -> AnswerResponse:
     """Generate an answer (GET version)."""
     try:
-        sources = retrieve(query, k=k)
+        sources = retrieve(query, k=k, method=method)
         answer_text = generate_answer(query, sources)
         return AnswerResponse(
             query=query,
             k=k,
+            method=method,
             sources=sources,
             answer=answer_text
         )
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
