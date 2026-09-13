@@ -18,6 +18,7 @@ a new dependency on top of what the bonuses already need.
 """
 
 import json
+import re
 import urllib.error
 import urllib.request
 from typing import Any, Dict, List
@@ -26,6 +27,33 @@ from src.models import MinimalSource
 
 OLLAMA_HOST = "http://localhost:11434"
 MODEL_ID = "qwen3:0.6b"
+
+# Filler openers qwen3:0.6b tends to produce despite prompt instructions not
+# to. Handled by deterministic post-processing rather than the prompt alone:
+# a one-shot example caused the model to echo the example's *content*
+# verbatim on unrelated questions, and explicitly naming the banned phrase
+# in the instruction ("never say 'The answer is'") caused it to reproduce
+# that exact phrase anyway -- both are known small-model failure modes
+# (weak instruction-following, and negation priming on literally-quoted
+# banned text). Stripping known prefixes after generation is more reliable
+# than hoping a 0.6B model parses either a demonstration or a negation
+# correctly.
+_FILLER_PREFIX_RE = re.compile(
+    r"^(the answer is:?|based on the (provided )?context,?|"
+    r"according to the context,?|answer:?)\s*",
+    re.IGNORECASE,
+)
+
+
+def _strip_filler_prefix(text: str) -> str:
+    """Repeatedly strip filler openers (they can double up, e.g.
+    "The answer is: The answer is ...")."""
+    previous = None
+    while previous != text:
+        previous = text
+        text = _FILLER_PREFIX_RE.sub("", text, count=1).lstrip()
+    return text
+
 
 # How long Ollama keeps the model loaded in memory after the last request.
 # Ollama's own default is "5m"; a batch run (search_dataset/answer_dataset,
@@ -70,7 +98,7 @@ def _call_ollama(prompt: str, max_new_tokens: int) -> str:
             f"If the model isn't pulled yet, run `ollama pull {MODEL_ID}`."
         ) from e
 
-    return str(body.get("response", "")).strip()
+    return _strip_filler_prefix(str(body.get("response", "")).strip())
 
 
 def generate_answer(
@@ -130,16 +158,25 @@ def generate_answer(
     context = "\n\n".join(context_parts)
 
     # Build prompt
-    prompt = f"""
-You are a precise technical assistant for software codebases.
-Answer the question based solely on the provided context.
-If the context does not contain the answer, say so.
+    #
+    # No example answer here: giving qwen3:0.6b a concrete one-shot example
+    # caused it to echo that example's *content* on unrelated questions
+    # rather than treat it as a style demonstration. And the instruction
+    # below deliberately doesn't quote the filler phrases we're avoiding --
+    # naming them literally caused the model to reproduce them anyway.
+    # _strip_filler_prefix() above is the actual backstop; this instruction
+    # just reduces how often it's needed.
+    prompt = f"""You are a precise technical assistant for software codebases.
+Answer the question based solely on the context below.
+If the context does not contain the answer, state that directly in one sentence.
+
+Respond with only the substantive answer itself: no restating the question,
+and no introductory phrase before the actual information.
 
 Context:
 {context}
 
 Question: {question}
 
-Answer:
-"""
+Answer:"""
     return _call_ollama(prompt, max_new_tokens)
