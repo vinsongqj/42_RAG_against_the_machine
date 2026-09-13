@@ -5,11 +5,13 @@ Bonus: Semantic embeddings. This module only builds and queries the vector
 index on its own -- merging its ranking with BM25's into a single result
 list is the separate hybrid-retrieval bonus (see src/retriever.py).
 
-Chunks are embedded with the CPU MiniLM model in src.embedder and stored in
-a Chroma PersistentClient collection under <processed_dir>/chroma. Chroma
-persists to disk itself, so a fresh process reuses the on-disk collection
-instead of recomputing anything at cold start -- the same caching pattern
-used for the BM25 retriever.
+Chunks are embedded with ChromaDB's built-in all-MiniLM-L6-v2 (via
+onnxruntime, see src.embedder) and stored in a Chroma PersistentClient
+collection under <processed_dir>/chroma. Chroma persists to disk itself,
+so a fresh process reuses the on-disk collection instead of recomputing
+anything at cold start -- the same caching pattern used for the BM25
+retriever. Embedding itself happens inside Chroma (we pass `documents=`
+and it calls the attached embedding function), not in this module.
 """
 
 from pathlib import Path
@@ -18,11 +20,11 @@ from typing import Any, Dict, List
 import chromadb
 from tqdm import tqdm
 
-from vector_embedder import embed_query, embed_texts
+from src.vector_embedder import get_embedding_function
 from src.models import CodeChunk, MinimalSource
 
 _COLLECTION_NAME = "rag_chunks"
-_EMBED_BATCH_SIZE = 64
+_ADD_BATCH_SIZE = 256
 
 # One Chroma client per index_dir, kept warm for the life of the process
 # (mirrors the BM25 retriever's module-level cache in src.retriever).
@@ -58,12 +60,14 @@ def build_vector_index(
         client.delete_collection(_COLLECTION_NAME)
     except Exception:
         pass  # collection didn't exist yet, nothing to drop
-    collection = client.create_collection(_COLLECTION_NAME)
+    collection = client.create_collection(
+        _COLLECTION_NAME,
+        embedding_function=get_embedding_function(),
+    )
 
-    for start in tqdm(range(0, len(chunks), _EMBED_BATCH_SIZE), desc="Embedding chunks"):
-        batch_chunks = chunks[start:start + _EMBED_BATCH_SIZE]
-        batch_texts = texts[start:start + _EMBED_BATCH_SIZE]
-        vectors = embed_texts(batch_texts)
+    for start in tqdm(range(0, len(chunks), _ADD_BATCH_SIZE), desc="Embedding chunks"):
+        batch_chunks = chunks[start:start + _ADD_BATCH_SIZE]
+        batch_texts = texts[start:start + _ADD_BATCH_SIZE]
         ids = [str(start + i) for i in range(len(batch_chunks))]
         metadatas = [
             {
@@ -73,10 +77,11 @@ def build_vector_index(
             }
             for c in batch_chunks
         ]
+        # Chroma embeds `documents` itself via the collection's attached
+        # embedding function -- no manual embed_texts()/vectors here.
         collection.add(
             ids=ids,
-            embeddings=vectors,
-            documents=[c.content for c in batch_chunks],
+            documents=batch_texts,
             metadatas=metadatas,
         )
 
@@ -87,7 +92,13 @@ def build_vector_index(
 def _get_collection(index_dir: str) -> Any:
     client = _get_client(index_dir)
     try:
-        return client.get_collection(_COLLECTION_NAME)
+        # The embedding function must be reattached on every load -- Chroma
+        # needs it to embed the *query* text at search time, not just at
+        # build time.
+        return client.get_collection(
+            _COLLECTION_NAME,
+            embedding_function=get_embedding_function(),
+        )
     except Exception as e:
         raise FileNotFoundError(
             f"Semantic index not found under {index_dir}; "
@@ -104,8 +115,7 @@ def semantic_search(
     if k <= 0:
         return []
     collection = _get_collection(index_dir)
-    query_vector = embed_query(query)
-    results = collection.query(query_embeddings=[query_vector], n_results=k)
+    results = collection.query(query_texts=[query], n_results=k)
 
     sources = []
     metadatas_by_query = results.get("metadatas") or [[]]

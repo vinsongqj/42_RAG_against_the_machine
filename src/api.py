@@ -1,24 +1,16 @@
-"""Local HTTP API for the RAG system."""
-
 from typing import List
-
 from fastapi import FastAPI, Query, HTTPException
 from pydantic import BaseModel
 import uvicorn
-
 from src.retriever import retrieve
 from src.generator import generate_answer
 from src.models import MinimalSource
 
 
-# ============================================================================
-# Pydantic Models for API
-# ============================================================================
-
 class SearchRequest(BaseModel):
     query: str
     k: int = 5
-    method: str = "bm25"  # "bm25" | "semantic" | "hybrid"
+    method: str = "bm25"
 
 
 class SearchResponse(BaseModel):
@@ -31,7 +23,7 @@ class SearchResponse(BaseModel):
 class AnswerRequest(BaseModel):
     query: str
     k: int = 5
-    method: str = "bm25"  # "bm25" | "semantic" | "hybrid"
+    method: str = "bm25"
 
 
 class AnswerResponse(BaseModel):
@@ -48,10 +40,6 @@ class HealthResponse(BaseModel):
     bm25_index_loaded: bool
     semantic_index_loaded: bool
 
-
-# ============================================================================
-# FastAPI App
-# ============================================================================
 
 app = FastAPI(
     title="RAG API",
@@ -79,14 +67,6 @@ def _check_semantic_loaded() -> bool:
 
 
 def _health_response() -> HealthResponse:
-    """Check whether the (cached) BM25 and semantic indexes can be loaded.
-
-    Both health endpoints previously duplicated this try/except and the
-    ``/health`` route always returned the stale module-level flag from
-    before ``/`` was ever hit, so it reported False even with a valid
-    index. Now checked live and reported per-index, since the semantic
-    index (Bonus 1) is optional and may not exist even when BM25 does.
-    """
     bm25_loaded = _check_bm25_loaded()
     semantic_loaded = _check_semantic_loaded()
     return HealthResponse(
@@ -97,27 +77,18 @@ def _health_response() -> HealthResponse:
     )
 
 
-# ============================================================================
-# Endpoints
-# ============================================================================
-
 @app.get("/", response_model=HealthResponse)
 async def root() -> HealthResponse:
-    """Health check endpoint."""
     return _health_response()
 
 
 @app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
-    """Health check endpoint."""
     return _health_response()
 
 
 @app.post("/search", response_model=SearchResponse)
 async def api_search(request: SearchRequest) -> SearchResponse:
-    """
-    Search the index and return top-k sources for a query.
-    """
     try:
         sources = retrieve(request.query, k=request.k, method=request.method)
         return SearchResponse(
@@ -140,7 +111,6 @@ async def api_search_get(
     k: int = Query(5, description="Number of results to return", ge=1, le=50),
     method: str = Query("bm25", description="bm25 | semantic | hybrid"),
 ) -> SearchResponse:
-    """Search the index (GET version)."""
     try:
         sources = retrieve(query, k=k, method=method)
         return SearchResponse(query=query, k=k, method=method, sources=sources)
@@ -154,9 +124,7 @@ async def api_search_get(
 
 @app.post("/answer", response_model=AnswerResponse)
 async def api_answer(request: AnswerRequest) -> AnswerResponse:
-    """
-    Generate an answer for a query using retrieved context.
-    """
+
     try:
         sources = retrieve(request.query, k=request.k, method=request.method)
         answer_text = generate_answer(request.query, sources)
@@ -181,7 +149,7 @@ async def api_answer_get(
     k: int = Query(5, description="Number of sources to retrieve", ge=1, le=50),
     method: str = Query("bm25", description="bm25 | semantic | hybrid"),
 ) -> AnswerResponse:
-    """Generate an answer (GET version)."""
+
     try:
         sources = retrieve(query, k=k, method=method)
         answer_text = generate_answer(query, sources)
@@ -199,10 +167,6 @@ async def api_answer_get(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ============================================================================
-# CLI Entry Point
-# ============================================================================
 
 def run_api(host: str = "0.0.0.0", port: int = 8000, reload: bool = False) -> None:
     """Run the API server."""

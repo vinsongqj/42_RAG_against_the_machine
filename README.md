@@ -51,6 +51,7 @@
 ### Quick commands
 A Makefile has been created for convenience. After cloning the repository, you may run the following commands:
 ```bash
+make ollama        # Sets up
 make install       # Installs the dependencies required
 make run           # Runs the pipeline for a single default query 
 make run-docs      # Runs the pipeline for the default docs dataset
@@ -436,6 +437,7 @@ This allows you to call `index` directly from the CLI using `uv run python -m sr
 * [What are Transformers (Machine Learning Model)? by IBM Technology](https://youtu.be/ZXiruGOCn9s)
 * [Getting Started with ChromaDB - Lowest Learning Curve Vector Database For Semantic Search by Johnny Code](https://youtu.be/QSW2L8dkaZk)
 * [Never Forget Again! // Precision vs Recall with a Clear Example of Precision and Recall by Kimberly Fessel](https://youtu.be/qWfzIYCvBqo)
+* [Ollama CLI Reference](https://docs.ollama.com/cli)
 * [Python Progress Bars with tqdm - Visually Explained by Visually Explained](https://youtu.be/VAoGebgGTdM?si=sk6jt61YAuuFHBsg)
 * [Markdown All in One by Yu Zhang (used for the table of contents)](https://marketplace.visualstudio.com/items?itemName=yzhang.markdown-all-in-one)
   

@@ -1,15 +1,13 @@
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
-
 import bm25s
-
 from src.cache import query_cache
 from src.chunker import code_friendly_text
 from src.models import MinimalSource
 from vector_indexer import semantic_search
 
-RetrievalMethod = str  # "bm25" | "semantic" | "hybrid"
+RetrievalMethod = str
 _VALID_METHODS = ("bm25", "semantic", "hybrid")
 
 _retriever_cache: Optional[Any] = None
@@ -33,14 +31,10 @@ def _bm25_search(query: str, k: int, index_dir: str) -> List[MinimalSource]:
     if k <= 0:
         return []
     retriever = _get_retriever(index_dir)
-    # bm25s raises if k exceeds the corpus size, which the hybrid pool_size
-    # (a fixed multiple of the requested k) can easily do on a small corpus.
     k = min(k, len(retriever.corpus))
     if k <= 0:
         return []
 
-    # Apply the same identifier-expansion transform that was used at index
-    # time — otherwise camelCase / snake_case queries cannot match.
     query_tokens = bm25s.tokenize([code_friendly_text(query)], show_progress=False)
     results, scores = retriever.retrieve(query_tokens, k=k, show_progress=False)
 
@@ -65,12 +59,6 @@ def _reciprocal_rank_fusion(
     rankings: List[List[MinimalSource]],
     rrf_constant: int = 60,
 ) -> List[MinimalSource]:
-    """Combine several ranked lists into one, via Reciprocal Rank Fusion.
-
-    RRF only needs each list's rank order (not comparable raw scores, which
-    BM25 and cosine similarity don't share a scale for), and is a standard,
-    cheap way to fuse lexical + semantic rankings.
-    """
     scores: Dict[Tuple[str, int, int], float] = defaultdict(float)
     first_seen: Dict[Tuple[str, int, int], MinimalSource] = {}
 
@@ -87,8 +75,6 @@ def _reciprocal_rank_fusion(
 def _hybrid_search(query: str, k: int, index_dir: str) -> List[MinimalSource]:
     if k <= 0:
         return []
-    # Pull a wider candidate pool from each method before fusing, so sources
-    # that only one method ranks highly still have a chance to surface.
     pool_size = max(k * 3, 20)
     lexical = _bm25_search(query, pool_size, index_dir)
     semantic = semantic_search(query, pool_size, index_dir)
@@ -103,25 +89,10 @@ def retrieve(
     method: RetrievalMethod = "bm25",
     use_cache: bool = True,
 ) -> List[MinimalSource]:
-    """Retrieve the top-k sources for a query.
-
-    ``method`` selects the retrieval strategy: "bm25" (lexical only, the
-    default -- matches the mandatory pipeline's original behaviour),
-    "semantic" (vector only), or "hybrid" (Reciprocal Rank Fusion of both).
-    "semantic"/"hybrid" require the vector index to have been built with
-    ``index --build_semantic true``.
-
-    ``use_cache`` is an explicit parameter rather than something callers
-    toggle by monkeypatching ``query_cache.get`` / ``set`` in place:
-    that mutated shared global state (unsafe under a thread pool) and
-    reassigned attributes to incompatible types.
-    """
+    
     if method not in _VALID_METHODS:
         raise ValueError(f"Unknown retrieval method {method!r}; expected one of {_VALID_METHODS}")
 
-    # Cache key uses the *original* query so lookups are stable across the
-    # tokenization transform, and includes method so results for different
-    # retrieval strategies never collide.
     cache_key = f"{query}::{k}::{index_dir}::{method}"
     if use_cache:
         cached = query_cache.get(cache_key)

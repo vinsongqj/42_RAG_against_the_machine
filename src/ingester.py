@@ -53,13 +53,7 @@ def ingest_directory(target_dir: str, chunk_size: int = 1000) -> List[CodeChunk]
 
 
 def chunk_generic(content: str, file_path: str, chunk_size: int = 1000) -> List[CodeChunk]:
-    """Generic chunking for prose-ish text (rst, txt, yaml, Dockerfile, ...).
 
-    Sentence- and paragraph-level separators before falling back to word
-    and character splits.  The previous separator list put a 4-space run
-    (``"    "``) ahead of ``" "`` which is a code-indent heuristic and only
-    hurt prose files; it has been removed.
-    """
     from src.chunker import RecursiveCharacterTextSplitter
 
     separators = ["\n\n", "\n", ". ", "? ", "! ", "; ", ", ", " ", ""]

@@ -4,7 +4,6 @@ from tqdm import tqdm
 from pathlib import Path
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
 from src.models import (
     UnansweredQuestion, MinimalSearchResults, StudentSearchResults,
     MinimalAnswer, StudentSearchResultsAndAnswer
@@ -20,24 +19,13 @@ def index(max_chunk_size: int = 2000,
           raw_dir: str = "data/raw",
           processed_dir: str = "data/processed",
           build_semantic: bool = False) -> None:
-    """Ingest raw_dir and build BM25 index under processed_dir.
 
-    Bonus: Semantic embeddings. Pass --build_semantic=true to also build a
-    Chroma + MiniLM vector index next to the BM25 index. Defaults to False
-    so the command's behaviour and timing are unchanged unless opted in.
-    """
     build_index(raw_dir, processed_dir, max_chunk_size, build_semantic=build_semantic)
 
 
 def search(query: str, k: int = 5, index_dir: str = "data/processed",
            method: str = "bm25") -> None:
-    """Single‑query search: print top-k sources as JSON.
 
-    Bonus: Hybrid retrieval. ``method`` is "bm25" (default, lexical only),
-    "semantic" (vector only), or "hybrid" (Reciprocal Rank Fusion of both).
-    "semantic"/"hybrid" require ``index --build_semantic true`` to have
-    been run first.
-    """
     sources = retrieve(query, k, index_dir, method)
     result = MinimalSearchResults(
         question_id="",
@@ -56,22 +44,11 @@ def search_dataset(
     use_cache: bool = False,
     method: str = "bm25",
 ) -> None:
-    """Batch search over a dataset with parallel processing.
 
-    Bonus: Hybrid retrieval. ``method`` is "bm25" (default), "semantic",
-    or "hybrid" -- see `search` for details.
-
-    ``use_cache`` is passed straight through to ``retrieve()`` rather than
-    monkeypatching ``query_cache.get``/``set`` in place: that approach
-    mutated shared global state (unsafe under this function's own thread
-    pool) and reassigned methods to incompatible types, which mypy
-    correctly flags as an error.
-    """
     with open(dataset_path, "r") as f:
         data = json.load(f)
     questions = [UnansweredQuestion(**q) for q in data.get("rag_questions", data)]
 
-    # Pre‑load the index once so every worker thread shares it
     _ = _get_retriever(index_dir)
 
     search_results = []
@@ -105,11 +82,7 @@ def search_dataset(
 
 def answer(query: str, k: int = 5, index_dir: str = "data/processed",
            method: str = "bm25") -> None:
-    """Single‑query answer generation.
 
-    Bonus: Hybrid retrieval. ``method`` is "bm25" (default), "semantic",
-    or "hybrid" -- see `search` for details.
-    """
     sources = retrieve(query, k, index_dir, method)
     answer_text = generate_answer(query, sources)
     result = MinimalAnswer(
@@ -126,7 +99,7 @@ def answer_dataset(
     save_directory: str,
     max_questions: Optional[int] = None,
 ) -> None:
-    """Generate answers from existing StudentSearchResults, optionally limiting."""
+
     with open(student_search_results_path, "r") as f:
         data = json.load(f)
     student_data = StudentSearchResults(**data)
@@ -161,7 +134,7 @@ def answer_dataset(
 def evaluate(student_search_results_path: str,
              dataset_path: str,
              k: Optional[int] = None) -> None:
-    """Compute recall@k against ground truth dataset."""
+    
     avg_recall = compute_recall(student_search_results_path, dataset_path, k)
     print(f"Recall@{k or 'default'}: {avg_recall:.4f}")
 

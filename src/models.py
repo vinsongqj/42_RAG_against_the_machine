@@ -43,7 +43,6 @@ class StudentSearchResultsAndAnswer(BaseModel):
     k: int
 
 
-# Internal model for chunk representation during indexing
 class CodeChunk(BaseModel):
     file_path: str
     content: str

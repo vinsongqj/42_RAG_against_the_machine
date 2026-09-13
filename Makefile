@@ -1,4 +1,4 @@
-.PHONY: install run debug clean lint lint-strict
+.PHONY: install run run-docs run-code answer-docs answer-code bonus-semantic debug clean lint lint-strict
 
 UV := uv
 PYTHON := python
@@ -62,6 +62,12 @@ answer-code:
 	--student_search_results_path data/output/search_results/UnansweredQuestions/dataset_code_public.json \
     --save_directory data/output/search_results_and_answer/UnansweredQuestions \
     --max_questions 10
+
+bonus-semantic:
+	@uv run python -m src index --max_chunk_size 1000 --build_semantic True
+	@echo "Checking if vector database exists..."
+	@ls -la data/processed/chroma/
+	@uv run python -m src search "What is PagedAttention?" --k 5 --method semantic
 
 debug:
 	@echo "Running in debug mode (pdb)..."

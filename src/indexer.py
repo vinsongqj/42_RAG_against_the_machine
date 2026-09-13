@@ -13,24 +13,11 @@ def build_index(
     b: float = 0.75,
     build_semantic: bool = False,
 ) -> None:
-    """Build the BM25 (lexical) index and, optionally, a semantic index.
-
-    ``bm25_text`` (when set) is what gets indexed; it may include a
-    header-trail prefix for markdown sections.  ``content`` and the
-    character offsets always refer to the on-disk file, so ``retrieve``
-    and ``generate_answer`` continue to work against the raw file.
-
-    Bonus: Semantic embeddings. ``build_semantic`` defaults to False so the
-    mandatory command's behaviour and timing are unaffected unless a
-    reviewer opts in with ``--build_semantic true``; when enabled, a Chroma
-    + MiniLM vector index (src.vector_index) is built next to the BM25
-    index, over the same enriched text used for BM25.
-    """
+   
     chunks = ingest_directory(raw_dir, max_chunk_size)
 
     corpus_metadata = [chunk.model_dump() for chunk in chunks]
-    # Prefer bm25_text when present, fall back to raw content.  Then apply
-    # the identifier-expansion transform so camelCase/snake_case match.
+
     corpus_texts = [
         code_friendly_text(c.bm25_text if c.bm25_text else c.content)
         for c in chunks

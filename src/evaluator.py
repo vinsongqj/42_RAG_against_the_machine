@@ -8,24 +8,18 @@ def compute_recall(
     dataset_path: str,
     k: Optional[int] = None,
 ) -> float:
-    """
-    Compute recall@k for the student search results against ground truth dataset.
-    Returns average recall over all questions.
-    """
-    # Load student results
+
     with open(student_search_results_path, "r") as f:
         student_data = json.load(f)
     student_results = StudentSearchResults(**student_data)
     if k is None:
         k = student_results.k
 
-    # Load ground truth dataset
     with open(dataset_path, "r") as f:
         gt_data = json.load(f)
-    # The dataset may contain AnsweredQuestion objects
+
     gt_questions = [AnsweredQuestion(**q) for q in gt_data.get("rag_questions", [])]
 
-    # Build mapping question_id -> ground truth sources
     gt_map = {q.question_id: q.sources for q in gt_questions}
 
     recalls = []
@@ -33,8 +27,8 @@ def compute_recall(
         qid = result.question_id
         gt_sources = gt_map.get(qid, [])
         if not gt_sources:
-            continue  # skip if no ground truth
-        retrieved = result.retrieved_sources[:k]  # top-k
+            continue
+        retrieved = result.retrieved_sources[:k]
 
         found = 0
         for gt in gt_sources:
@@ -49,10 +43,6 @@ def compute_recall(
 
 
 def _is_covered(gt: MinimalSource, retrieved: List[MinimalSource]) -> bool:
-    """
-    Check if any retrieved source covers the ground truth source.
-    Coverage: same file and IoU >= 0.05.
-    """
     for ret in retrieved:
         if ret.file_path != gt.file_path:
             continue
