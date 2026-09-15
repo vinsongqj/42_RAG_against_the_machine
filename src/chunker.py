@@ -3,10 +3,6 @@ from typing import List, Optional, Tuple
 from src.models import CodeChunk
 
 
-# ============================================================================
-# Identifier-aware text normalisation (used by BM25 at index & query time)
-# ============================================================================
-
 _CAMEL_ACRONYM = re.compile(r"([A-Z]+)([A-Z][a-z])")
 _CAMEL_LOWER = re.compile(r"([a-z0-9])([A-Z])")
 
@@ -17,10 +13,6 @@ def code_friendly_text(text: str) -> str:
     text = _CAMEL_LOWER.sub(r"\1 \2", text)
     return text.replace("_", " ")
 
-
-# ============================================================================
-# Recursive splitter
-# ============================================================================
 
 class RecursiveCharacterTextSplitter:
     def __init__(self, chunk_size: int = 2000, chunk_overlap: int = 200,
@@ -95,10 +87,6 @@ class RecursiveCharacterTextSplitter:
         return self._split_text(text, self.separators)
 
 
-# ============================================================================
-# Python chunking
-# ============================================================================
-
 _PY_BOUNDARY_RE = re.compile(r"(?=\n(?:class |(?:async )?def |    def ))")
 
 
@@ -123,34 +111,28 @@ def chunk_python(content: str, file_path: str, chunk_size: int = 1000) -> List[C
     return _to_chunks(content, file_path, fallback, texts=pieces)
 
 
-# ============================================================================
-# Markdown chunking
-# ============================================================================
-
-# ATX header line: 1-6 #, then whitespace, then title (trailing #'s optional).
 _HEADER_LINE_RE = re.compile(r"^(#{1,6})[ \t]+(.*?)[ \t]*#*[ \t]*$")
 
-# Zero-width lookahead: split *before* the newline that precedes a header.
-# Keeps the "\n" and "#"s attached to the following piece (no text lost).
-# Accepts any whitespace after the #'s, so "#Header" with a tab also matches.
 _MD_HEADER_BOUNDARY_RE = re.compile(r"(?=\n#{1,6}[ \t])")
 
 
 def chunk_markdown(content: str, file_path: str, chunk_size: int = 1200) -> List[CodeChunk]:
-
+ 
     fallback_splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=min(300, chunk_size // 3),
         separators=["\n\n", "\n", " ", ""],
     )
 
-    raw_sections = _MD_HEADER_BOUNDARY_RE.split(content)
-    raw_sections = [s for s in raw_sections if s.strip()]
+    sections = _MD_HEADER_BOUNDARY_RE.split(content)
+    sections = [s.lstrip("\n") for s in sections if s.strip()]
 
     header_stack: List[Tuple[int, str]] = []
-    tagged: List[Tuple[int, str, str, str]] = []
-    for section in raw_sections:
-        first_line = section.lstrip("\n").split("\n", 1)[0]
+    pieces: List[str] = []
+    bm25_texts: List[str] = []
+
+    for section in sections:
+        first_line = section.split("\n", 1)[0]
         m = _HEADER_LINE_RE.match(first_line)
         if m:
             level = len(m.group(1))
@@ -158,36 +140,16 @@ def chunk_markdown(content: str, file_path: str, chunk_size: int = 1200) -> List
             while header_stack and header_stack[-1][0] >= level:
                 header_stack.pop()
             header_stack.append((level, title))
-        else:
-            level = header_stack[-1][0] if header_stack else 0
-            title = ""
+
         trail = " > ".join(t for _, t in header_stack)
-        tagged.append((level, title, section, trail))
-
-    MIN_SECTION_CHARS = 500
-    merged: List[Tuple[int, str, str, str]] = []
-    buffer: Optional[Tuple[int, str, str, str]] = None
-    for level, title, text, trail in tagged:
-        if buffer is None:
-            buffer = (level, title, text, trail)
-        elif len(buffer[2]) < MIN_SECTION_CHARS:
-            buffer = (buffer[0], buffer[1], buffer[2] + text, trail)
-        else:
-            merged.append(buffer)
-            buffer = (level, title, text, trail)
-    if buffer is not None:
-        merged.append(buffer)
-
-    pieces: List[str] = []
-    bm25_texts: List[str] = []
-    for _level, _title, text, trail in merged:
         prefix = f"{trail}: " if trail else ""
-        if len(text) <= chunk_size:
-            pieces.append(text)
-            bm25_texts.append(prefix + text)
+
+        if len(section) <= chunk_size:
+            pieces.append(section)
+            bm25_texts.append(prefix + section)
         else:
             sub_merged = fallback_splitter.merge_pieces(
-                fallback_splitter.split_text(text)
+                fallback_splitter.split_text(section)
             )
             for sub in sub_merged:
                 pieces.append(sub)
@@ -199,8 +161,7 @@ def chunk_markdown(content: str, file_path: str, chunk_size: int = 1200) -> List
     )
 
 
-def _to_chunks(content: str,
-               file_path: str,
+def _to_chunks(content: str, file_path: str,
                splitter: RecursiveCharacterTextSplitter,
                texts: Optional[List[str]] = None,
                bm25_texts: Optional[List[str]] = None) -> List[CodeChunk]:

@@ -15,4 +15,7 @@ moulinette-fedora
 moulinette-ubuntu
 moulinette
 
+evaluations/
+exams/
+
 *.egg-info

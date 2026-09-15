@@ -2,7 +2,7 @@ import bm25s
 from pathlib import Path
 from src.ingester import ingest_directory
 from src.chunker import code_friendly_text
-from vector_indexer import build_vector_index
+from src.vector_indexer import build_vector_index
 
 
 def build_index(
@@ -13,7 +13,7 @@ def build_index(
     b: float = 0.75,
     build_semantic: bool = False,
 ) -> None:
-   
+
     chunks = ingest_directory(raw_dir, max_chunk_size)
 
     corpus_metadata = [chunk.model_dump() for chunk in chunks]

@@ -11,9 +11,11 @@ class QueryCache:
         self.memory_cache: Dict[str, Any] = {}
 
     def _key_to_filename(self, key: str) -> str:
+
         return hashlib.md5(key.encode()).hexdigest()
 
     def get(self, key: str) -> Optional[Any]:
+
         if key in self.memory_cache:
             return self.memory_cache[key]
 

@@ -59,7 +59,7 @@ def _check_bm25_loaded() -> bool:
 
 def _check_semantic_loaded() -> bool:
     try:
-        from vector_indexer import _get_collection
+        from src.vector_indexer import _get_collection
         _get_collection("data/processed")
         return True
     except Exception:
@@ -67,6 +67,7 @@ def _check_semantic_loaded() -> bool:
 
 
 def _health_response() -> HealthResponse:
+
     bm25_loaded = _check_bm25_loaded()
     semantic_loaded = _check_semantic_loaded()
     return HealthResponse(
@@ -79,16 +80,19 @@ def _health_response() -> HealthResponse:
 
 @app.get("/", response_model=HealthResponse)
 async def root() -> HealthResponse:
+
     return _health_response()
 
 
 @app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
+
     return _health_response()
 
 
 @app.post("/search", response_model=SearchResponse)
 async def api_search(request: SearchRequest) -> SearchResponse:
+
     try:
         sources = retrieve(request.query, k=request.k, method=request.method)
         return SearchResponse(
@@ -111,6 +115,7 @@ async def api_search_get(
     k: int = Query(5, description="Number of results to return", ge=1, le=50),
     method: str = Query("bm25", description="bm25 | semantic | hybrid"),
 ) -> SearchResponse:
+
     try:
         sources = retrieve(query, k=k, method=method)
         return SearchResponse(query=query, k=k, method=method, sources=sources)

@@ -8,7 +8,6 @@ def compute_recall(
     dataset_path: str,
     k: Optional[int] = None,
 ) -> float:
-
     with open(student_search_results_path, "r") as f:
         student_data = json.load(f)
     student_results = StudentSearchResults(**student_data)
@@ -52,7 +51,6 @@ def _is_covered(gt: MinimalSource, retrieved: List[MinimalSource]) -> bool:
 
 
 def _iou(a: MinimalSource, b: MinimalSource) -> float:
-    """Intersection over Union of two character intervals."""
     start = max(a.first_character_index, b.first_character_index)
     end = min(a.last_character_index, b.last_character_index)
     inter = max(0, end - start)
