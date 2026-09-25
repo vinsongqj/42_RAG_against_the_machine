@@ -209,67 +209,98 @@ Or across the entire dataset:
 ## System architecture
 
 ```mermaid
----
-config:
-  theme: base
-  themeVariables:
-    primaryColor: '#b9eee8'
-    primaryTextColor: '#123b38'
-    primaryBorderColor: '#2aaea2'
-    lineColor: '#7777ff'
----
-flowchart LR
-    %% INDEXING STAGE
-    subgraph IDX["INDEXING"]
-        direction LR
-        raw["data/raw"] --> ingest["Ingester"] --> fileType{"File Type?"}
-        
-        %% Chunker Stack (Saves horizontal space)
-        fileType -- ".py" --> python["Python Chunker"]
-        fileType -- ".md" --> markdown["Markdown Chunker"]
-        fileType -- "Other" --> generic["Generic Chunker"]
-        
-        python & markdown & generic --> index["BM25 Index"] --> processed["data/processed"]
-    end
+flowchart TD
 
-    %% RETRIEVAL STAGE
-    subgraph RET["RETRIEVAL"]
-        direction LR
-        query["Query"] --> retriever["BM25 Retriever"] --> topK["Top-k Sources"] --> minimal["MinimalSource"]
-    end
+subgraph group_ingest["Ingestion and indexing"]
+  node_ingest["Directory ingestion<br/>[ingest.py]"]
+  node_chunk["Content chunking<br/>[chunk.py]"]
+  node_models["Chunk and result models<br/>[models.py]"]
+  node_index["Index builder<br/>[index.py]"]
+end
 
-    %% AUGMENTATION STAGE
-    subgraph AUG["AUGMENTATION"]
-        direction LR
-        original["Read Original Files"] --> ranges["Slice Character Ranges"] --> context["Build Context Prompt"]
-    end
+subgraph group_search["Retrieval"]
+  node_bm25[("BM25 index")]
+  node_semantic[("Semantic index")]
+  node_retrieve["Retrieval service<br/>[retrieve.py]"]
+  node_rank["Ranking and fusion<br/>[rank.py]"]
+  node_cache[("Query cache<br/>[cache.py]")]
+  node_embedding["Semantic search and indexing"]
+end
 
-    %% GENERATION STAGE
-    subgraph GEN["GENERATION"]
-        direction LR
-        model["Qwen3-0.6B"] --> answer["Generated Answer"]
-    end
+subgraph group_answers["Answer generation"]
+  node_generate["Answer generation<br/>[generate.py]"]
+end
 
-    %% COMPACT CROSS-STAGE LINKING
-    processed --> retriever
-    minimal --> original
-    context --> model
+subgraph group_interfaces["User interfaces"]
+  node_cli["CLI commands<br/>[__main__.py]"]
+  node_api["HTTP API<br/>[api.py]"]
+end
 
-    %% STYLE DEFINITIONS
-    classDef stage fill:#b9eee8,stroke:#2aaea2,color:#123b38,stroke-width:1px;
-    classDef output fill:#008f7a,stroke:#00695c,color:#ffffff,stroke-width:1px;
-    
-    class raw,ingest,fileType,python,markdown,generic,index,processed stage;
-    class query,retriever,topK,minimal stage;
-    class original,ranges,context stage;
-    class model stage;
-    class answer output;
+subgraph group_evaluation["Evaluation"]
+  node_evaluate["Recall evaluator<br/>[evaluate.py]"]
+end
 
-    %% Transparent background fix ('fill:none')
-    style IDX fill:none,stroke:#7777ff,stroke-width:1px
-    style RET fill:none,stroke:#7777ff,stroke-width:1px
-    style AUG fill:none,stroke:#7777ff,stroke-width:1px
-    style GEN fill:none,stroke:#7777ff,stroke-width:1px
+node_user(("User"))
+node_corpus["Codebase corpus"]
+node_questions["Question dataset"]
+node_ollama["Ollama model service"]
+node_results["Search and answer results"]
+
+node_user -->|"runs commands"| node_cli
+node_user -->|"sends requests"| node_api
+node_corpus -->|"provides files"| node_ingest
+node_ingest -->|"selects chunking"| node_chunk
+node_chunk -->|"creates chunks"| node_models
+node_ingest -->|"returns chunks"| node_models
+node_cli -->|"builds indexes"| node_index
+node_index -->|"ingests directory"| node_ingest
+node_index -->|"writes lexical index"| node_bm25
+node_index -->|"clears cache"| node_cache
+node_index -.->|"builds optional vectors"| node_embedding
+node_embedding -->|"writes vectors"| node_semantic
+node_cli -->|"searches questions"| node_retrieve
+node_api -->|"searches questions"| node_retrieve
+node_retrieve -->|"loads lexical index"| node_bm25
+node_retrieve -->|"ranks results"| node_rank
+node_rank -->|"requests semantic results"| node_embedding
+node_embedding -->|"queries vectors"| node_semantic
+node_retrieve -->|"reads and writes"| node_cache
+node_cli -->|"reads dataset"| node_questions
+node_cli -->|"writes search results"| node_results
+node_cli -->|"generates answer"| node_generate
+node_api -->|"generates answer"| node_generate
+node_generate -->|"reads source spans"| node_corpus
+node_generate -->|"sends prompt"| node_ollama
+node_cli -->|"reads prior results"| node_results
+node_cli -->|"computes recall"| node_evaluate
+node_evaluate -->|"reads ground truth"| node_questions
+node_evaluate -->|"reads retrieved spans"| node_results
+
+click node_cli "https://github.com/vinsongqj/42_rag_against_the_machine/blob/main/src/__main__.py"
+click node_api "https://github.com/vinsongqj/42_rag_against_the_machine/blob/main/src/api.py"
+click node_ingest "https://github.com/vinsongqj/42_rag_against_the_machine/blob/main/src/ingest.py"
+click node_chunk "https://github.com/vinsongqj/42_rag_against_the_machine/blob/main/src/chunk.py"
+click node_models "https://github.com/vinsongqj/42_rag_against_the_machine/blob/main/src/models.py"
+click node_index "https://github.com/vinsongqj/42_rag_against_the_machine/blob/main/src/index.py"
+click node_retrieve "https://github.com/vinsongqj/42_rag_against_the_machine/blob/main/src/retrieve.py"
+click node_rank "https://github.com/vinsongqj/42_rag_against_the_machine/blob/main/src/rank.py"
+click node_cache "https://github.com/vinsongqj/42_rag_against_the_machine/blob/main/src/cache.py"
+click node_embedding "https://github.com/vinsongqj/42_rag_against_the_machine/blob/main/src/semantic_embedding.py"
+click node_generate "https://github.com/vinsongqj/42_rag_against_the_machine/blob/main/src/generate.py"
+click node_evaluate "https://github.com/vinsongqj/42_rag_against_the_machine/blob/main/src/evaluate.py"
+
+classDef toneNeutral fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
+classDef toneBlue fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
+classDef toneAmber fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+classDef toneMint fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
+classDef toneRose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337
+classDef toneIndigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
+classDef toneTeal fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
+class node_ingest,node_chunk,node_models,node_index,node_user toneBlue
+class node_bm25,node_semantic,node_retrieve,node_rank,node_cache,node_embedding toneAmber
+class node_generate toneMint
+class node_cli,node_api toneRose
+class node_evaluate,node_corpus,node_questions,node_ollama,node_results toneIndigo
 ```
 
 [↑ Back to Table of Contents](#rag-against-the-machine)
