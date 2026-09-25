@@ -1,14 +1,19 @@
 from pathlib import Path
 from typing import Any, Dict, List
 import chromadb
+from chromadb.utils import embedding_functions
 from tqdm import tqdm
-from src.vector_embedder import get_embedding_function
+from src.fingerprint import FingerprintedCache
 from src.models import CodeChunk, MinimalSource
 
 _COLLECTION_NAME = "rag_chunks"
 _ADD_BATCH_SIZE = 256
 
 _client_cache: Dict[str, Any] = {}
+
+
+def get_embedding_function() -> Any:
+    return embedding_functions.DefaultEmbeddingFunction()
 
 
 def _get_client(index_dir: str) -> Any:
@@ -19,12 +24,30 @@ def _get_client(index_dir: str) -> Any:
     return _client_cache[index_dir]
 
 
+def _load_collection(index_dir: str) -> Any:
+    client = _get_client(index_dir)
+    try:
+        return client.get_collection(
+            _COLLECTION_NAME,
+            embedding_function=get_embedding_function(),
+        )
+    except Exception as e:
+        raise FileNotFoundError(
+            f"Semantic index not found under {index_dir}; "
+            "run `index` with semantic embeddings enabled first."
+        ) from e
+
+
+_collection_cache = FingerprintedCache(_load_collection)
+
+
 def build_vector_index(
     chunks: List[CodeChunk],
     texts: List[str],
     processed_dir: str,
 ) -> None:
     client = _get_client(processed_dir)
+    _collection_cache.invalidate()
     try:
         client.delete_collection(_COLLECTION_NAME)
     except Exception:
@@ -46,36 +69,22 @@ def build_vector_index(
             }
             for c in batch_chunks
         ]
+        collection.add(ids=ids, documents=batch_texts, metadatas=metadatas)
 
-        collection.add(
-            ids=ids,
-            documents=batch_texts,
-            metadatas=metadatas,
-        )
-
+    _collection_cache.set(processed_dir, collection, Path(processed_dir) / "chroma")
     print(f"Semantic index saved to {Path(processed_dir) / 'chroma'}")
     print(f"Embedded {len(chunks)} chunks")
 
 
 def _get_collection(index_dir: str) -> Any:
-    client = _get_client(index_dir)
-    try:
-        return client.get_collection(
-            _COLLECTION_NAME,
-            embedding_function=get_embedding_function(),
-        )
-    except Exception as e:
-        raise FileNotFoundError(
-            f"Semantic index not found under {index_dir}; "
-            "run `index` with semantic embeddings enabled first."
-        ) from e
+    return _collection_cache.get(index_dir, Path(index_dir) / "chroma")
 
 
-def semantic_search(
-    query: str,
-    k: int = 5,
-    index_dir: str = "data/processed",
-) -> List[MinimalSource]:
+def preload_collection(index_dir: str = "data/processed") -> None:
+    _get_collection(index_dir)
+
+
+def semantic_search(query: str, k: int = 5, index_dir: str = "data/processed") -> List[MinimalSource]:
     if k <= 0:
         return []
     collection = _get_collection(index_dir)

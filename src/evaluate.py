@@ -1,6 +1,6 @@
 import json
 from typing import List, Optional
-from src.models import AnsweredQuestion, StudentSearchResults, MinimalSource
+from src.models import AnsweredQuestion, RagDataset, StudentSearchResults, MinimalSource
 
 
 def compute_recall(
@@ -16,38 +16,32 @@ def compute_recall(
 
     with open(dataset_path, "r") as f:
         gt_data = json.load(f)
-
-    gt_questions = [AnsweredQuestion(**q) for q in gt_data.get("rag_questions", [])]
-
+    gt_questions = RagDataset(**gt_data).rag_questions
+    for q in gt_questions:
+        if not isinstance(q, AnsweredQuestion):
+            raise ValueError(
+                f"Ground-truth question {q.question_id!r} in {dataset_path} "
+                "is missing its 'sources'/'answer' fields."
+            )
     gt_map = {q.question_id: q.sources for q in gt_questions}
 
     recalls = []
     for result in student_results.search_results:
-        qid = result.question_id
-        gt_sources = gt_map.get(qid, [])
+        gt_sources = gt_map.get(result.question_id, [])
         if not gt_sources:
             continue
         retrieved = result.retrieved_sources[:k]
+        found = sum(1 for gt in gt_sources if _is_covered(gt, retrieved))
+        recalls.append(found / len(gt_sources))
 
-        found = 0
-        for gt in gt_sources:
-            if _is_covered(gt, retrieved):
-                found += 1
-        recall = found / len(gt_sources)
-        recalls.append(recall)
-
-    if not recalls:
-        return 0.0
-    return sum(recalls) / len(recalls)
+    return sum(recalls) / len(recalls) if recalls else 0.0
 
 
 def _is_covered(gt: MinimalSource, retrieved: List[MinimalSource]) -> bool:
-    for ret in retrieved:
-        if ret.file_path != gt.file_path:
-            continue
-        if _iou(gt, ret) >= 0.05:
-            return True
-    return False
+    return any(
+        ret.file_path == gt.file_path and _iou(gt, ret) >= 0.05
+        for ret in retrieved
+    )
 
 
 def _iou(a: MinimalSource, b: MinimalSource) -> float:

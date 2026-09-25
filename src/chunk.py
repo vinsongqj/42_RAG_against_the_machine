@@ -8,7 +8,6 @@ _CAMEL_LOWER = re.compile(r"([a-z0-9])([A-Z])")
 
 
 def code_friendly_text(text: str) -> str:
-    """Split camelCase / PascalCase / snake_case into space-separated tokens."""
     text = _CAMEL_ACRONYM.sub(r"\1 \2", text)
     text = _CAMEL_LOWER.sub(r"\1 \2", text)
     return text.replace("_", " ")
@@ -112,12 +111,10 @@ def chunk_python(content: str, file_path: str, chunk_size: int = 1000) -> List[C
 
 
 _HEADER_LINE_RE = re.compile(r"^(#{1,6})[ \t]+(.*?)[ \t]*#*[ \t]*$")
-
 _MD_HEADER_BOUNDARY_RE = re.compile(r"(?=\n#{1,6}[ \t])")
 
 
 def chunk_markdown(content: str, file_path: str, chunk_size: int = 1200) -> List[CodeChunk]:
- 
     fallback_splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=min(300, chunk_size // 3),

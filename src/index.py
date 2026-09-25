@@ -1,8 +1,9 @@
 import bm25s
 from pathlib import Path
-from src.ingester import ingest_directory
-from src.chunker import code_friendly_text
-from src.vector_indexer import build_vector_index
+from src.ingest import ingest_directory
+from src.chunk import code_friendly_text
+from src.semantic_embedding import build_vector_index
+from src.cache import query_cache
 
 
 def build_index(
@@ -13,11 +14,10 @@ def build_index(
     b: float = 0.75,
     build_semantic: bool = False,
 ) -> None:
-
+    query_cache.clear()
     chunks = ingest_directory(raw_dir, max_chunk_size)
 
     corpus_metadata = [chunk.model_dump() for chunk in chunks]
-
     corpus_texts = [
         code_friendly_text(c.bm25_text if c.bm25_text else c.content)
         for c in chunks

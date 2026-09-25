@@ -1,10 +1,28 @@
-from typing import List
-from fastapi import FastAPI, Query, HTTPException
-from pydantic import BaseModel
+from functools import wraps
+from typing import Any, Callable, List, TypeVar
 import uvicorn
-from src.retriever import retrieve
-from src.generator import generate_answer
+from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel
+from src.generate import generate_answer
 from src.models import MinimalSource
+from src.retrieve import retrieve, preload_retriever
+from src.semantic_embedding import preload_collection
+
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def _as_http_errors(func: F) -> F:
+    @wraps(func)
+    async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return await func(*args, **kwargs)
+        except FileNotFoundError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    return wrapper
 
 
 class SearchRequest(BaseModel):
@@ -44,14 +62,13 @@ class HealthResponse(BaseModel):
 app = FastAPI(
     title="RAG API",
     description="Retrieval-Augmented Generation API for codebase Q&A",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 
 def _check_bm25_loaded() -> bool:
     try:
-        from src.retriever import _get_retriever
-        _get_retriever()
+        preload_retriever()
         return True
     except Exception:
         return False
@@ -59,15 +76,13 @@ def _check_bm25_loaded() -> bool:
 
 def _check_semantic_loaded() -> bool:
     try:
-        from src.vector_indexer import _get_collection
-        _get_collection("data/processed")
+        preload_collection("data/processed")
         return True
     except Exception:
         return False
 
 
 def _health_response() -> HealthResponse:
-
     bm25_loaded = _check_bm25_loaded()
     semantic_loaded = _check_semantic_loaded()
     return HealthResponse(
@@ -80,101 +95,58 @@ def _health_response() -> HealthResponse:
 
 @app.get("/", response_model=HealthResponse)
 async def root() -> HealthResponse:
-
     return _health_response()
 
 
 @app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
-
     return _health_response()
 
 
-@app.post("/search", response_model=SearchResponse)
-async def api_search(request: SearchRequest) -> SearchResponse:
+def _do_search(query: str, k: int, method: str) -> SearchResponse:
+    sources = retrieve(query, k=k, method=method)
+    return SearchResponse(query=query, k=k, method=method, sources=sources)
 
-    try:
-        sources = retrieve(request.query, k=request.k, method=request.method)
-        return SearchResponse(
-            query=request.query,
-            k=request.k,
-            method=request.method,
-            sources=sources
-        )
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
+def _do_answer(query: str, k: int, method: str) -> AnswerResponse:
+    sources = retrieve(query, k=k, method=method)
+    answer_text = generate_answer(query, sources)
+    return AnswerResponse(query=query, k=k, method=method, sources=sources, answer=answer_text)
+
+
+@app.post("/search", response_model=SearchResponse)
+@_as_http_errors
+async def api_search(request: SearchRequest) -> SearchResponse:
+    return _do_search(request.query, request.k, request.method)
 
 
 @app.get("/search", response_model=SearchResponse)
+@_as_http_errors
 async def api_search_get(
     query: str = Query(..., description="Search query"),
     k: int = Query(5, description="Number of results to return", ge=1, le=50),
     method: str = Query("bm25", description="bm25 | semantic | hybrid"),
 ) -> SearchResponse:
-
-    try:
-        sources = retrieve(query, k=k, method=method)
-        return SearchResponse(query=query, k=k, method=method, sources=sources)
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return _do_search(query, k, method)
 
 
 @app.post("/answer", response_model=AnswerResponse)
+@_as_http_errors
 async def api_answer(request: AnswerRequest) -> AnswerResponse:
-
-    try:
-        sources = retrieve(request.query, k=request.k, method=request.method)
-        answer_text = generate_answer(request.query, sources)
-        return AnswerResponse(
-            query=request.query,
-            k=request.k,
-            method=request.method,
-            sources=sources,
-            answer=answer_text
-        )
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return _do_answer(request.query, request.k, request.method)
 
 
 @app.get("/answer", response_model=AnswerResponse)
+@_as_http_errors
 async def api_answer_get(
     query: str = Query(..., description="Question to answer"),
     k: int = Query(5, description="Number of sources to retrieve", ge=1, le=50),
     method: str = Query("bm25", description="bm25 | semantic | hybrid"),
 ) -> AnswerResponse:
-
-    try:
-        sources = retrieve(query, k=k, method=method)
-        answer_text = generate_answer(query, sources)
-        return AnswerResponse(
-            query=query,
-            k=k,
-            method=method,
-            sources=sources,
-            answer=answer_text
-        )
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return _do_answer(query, k, method)
 
 
 def run_api(host: str = "0.0.0.0", port: int = 8000, reload: bool = False) -> None:
-    """Run the API server."""
     print(f"Starting RAG API server on http://{host}:{port}")
     print(f"Documentation available at http://{host}:{port}/docs")
     uvicorn.run("src.api:app", host=host, port=port, reload=reload)

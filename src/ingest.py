@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import List
 from tqdm import tqdm
 from src.models import CodeChunk
-from src.chunker import chunk_markdown, chunk_python
+from src.chunk import chunk_markdown, chunk_python, RecursiveCharacterTextSplitter, _to_chunks
 
 
 _SKIP_DIR_NAMES = {
@@ -53,9 +53,6 @@ def ingest_directory(target_dir: str, chunk_size: int = 1000) -> List[CodeChunk]
 
 
 def chunk_generic(content: str, file_path: str, chunk_size: int = 1000) -> List[CodeChunk]:
-
-    from src.chunker import RecursiveCharacterTextSplitter
-
     separators = ["\n\n", "\n", ". ", "? ", "! ", "; ", ", ", " ", ""]
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
@@ -64,26 +61,4 @@ def chunk_generic(content: str, file_path: str, chunk_size: int = 1000) -> List[
     )
 
     texts = splitter.split_text(content)
-    chunks: List[CodeChunk] = []
-    position = 0
-
-    for text in texts:
-        start = content.find(text, position)
-        if start == -1:
-            start = position
-        end = start + len(text)
-        if end - start > chunk_size:
-            end = start + chunk_size
-            text = content[start:end]
-
-        chunks.append(
-            CodeChunk(
-                file_path=file_path,
-                content=text,
-                first_character_index=start,
-                last_character_index=end,
-            )
-        )
-        position = end
-
-    return chunks
+    return _to_chunks(content, file_path, splitter, texts=texts)

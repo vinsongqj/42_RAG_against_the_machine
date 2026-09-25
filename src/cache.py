@@ -1,5 +1,5 @@
 import hashlib
-import pickle
+import json
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -11,34 +11,30 @@ class QueryCache:
         self.memory_cache: Dict[str, Any] = {}
 
     def _key_to_filename(self, key: str) -> str:
-
         return hashlib.md5(key.encode()).hexdigest()
 
     def get(self, key: str) -> Optional[Any]:
-
         if key in self.memory_cache:
             return self.memory_cache[key]
 
-        filename = self._key_to_filename(key)
-        cache_file = self.cache_dir / f"{filename}.pkl"
+        cache_file = self.cache_dir / f"{self._key_to_filename(key)}.json"
         if cache_file.exists():
-            with open(cache_file, "rb") as f:
-                result = pickle.load(f)
+            with open(cache_file, "r", encoding="utf-8") as f:
+                result = json.load(f)
                 self.memory_cache[key] = result
                 return result
         return None
 
     def set(self, key: str, value: Any) -> None:
         self.memory_cache[key] = value
-        filename = self._key_to_filename(key)
-        cache_file = self.cache_dir / f"{filename}.pkl"
+        cache_file = self.cache_dir / f"{self._key_to_filename(key)}.json"
         cache_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(cache_file, "wb") as f:
-            pickle.dump(value, f)
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump(value, f)
 
     def clear(self) -> None:
         self.memory_cache.clear()
-        for f in self.cache_dir.glob("*.pkl"):
+        for f in self.cache_dir.glob("*.json"):
             f.unlink()
 
 

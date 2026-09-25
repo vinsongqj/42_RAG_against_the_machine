@@ -3,6 +3,15 @@ from typing import List, Optional, Union
 from pydantic import BaseModel, Field
 
 
+class CodeChunk(BaseModel):
+    file_path: str
+    content: str
+    first_character_index: int
+    last_character_index: int
+    score: Optional[float] = None
+    bm25_text: Optional[str] = None
+
+
 class MinimalSource(BaseModel):
     file_path: str
     first_character_index: int
@@ -41,12 +50,3 @@ class StudentSearchResults(BaseModel):
 class StudentSearchResultsAndAnswer(BaseModel):
     search_results: List[MinimalAnswer]
     k: int
-
-
-class CodeChunk(BaseModel):
-    file_path: str
-    content: str
-    first_character_index: int
-    last_character_index: int
-    score: Optional[float] = None
-    bm25_text: Optional[str] = None
