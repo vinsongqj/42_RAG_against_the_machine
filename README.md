@@ -47,11 +47,17 @@
 ### Requirements
 * python3.10+
 * uv 
+* Ollama
+
+Before running the program, make sure you have Ollama set up:
+1)  Check if Ollama is installed with `ollama --version`.
+2)  Start the server with `ollama serve`.
+3)  Install the LLM with `ollama pull qwen3:0.6B`. You can check if it is already installed with `ollama list`.
+
   
 ### Quick commands
 A Makefile has been created for convenience. After cloning the repository, you may run the following commands:
 ```bash
-make ollama        # Sets up
 make install       # Installs the dependencies required
 make run           # Runs the pipeline for a single default query 
 make run-docs      # Runs the pipeline for the default docs dataset
@@ -471,6 +477,7 @@ This allows you to call `index` directly from the CLI using `uv run python -m sr
 * [Ollama CLI Reference](https://docs.ollama.com/cli)
 * [Python Progress Bars with tqdm - Visually Explained by Visually Explained](https://youtu.be/VAoGebgGTdM?si=sk6jt61YAuuFHBsg)
 * [Markdown All in One by Yu Zhang (used for the table of contents)](https://marketplace.visualstudio.com/items?itemName=yzhang.markdown-all-in-one)
+* [GitDiagram (used to generate mermaid diagram for system architecture section)](https://gitdiagram.com/)
   
 [↑ Back to Table of Contents](#rag-against-the-machine)
 
