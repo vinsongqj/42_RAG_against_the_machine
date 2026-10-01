@@ -17,6 +17,13 @@ Evaluation:
 - RagDataset
 - StudentSearchResults
 - StudentSearchResultsAndAnswer
+
+API:
+- SearchRequest
+- SearchResponse
+- AnswerRequest
+- AnswerResponse
+- HealthResponse
 """
 
 import uuid
@@ -158,3 +165,84 @@ class StudentSearchResultsAndAnswer(BaseModel):
     """
     search_results: List[MinimalAnswer]
     k: int
+
+
+# -------------------------------- API ----------------------------------------
+
+
+class SearchRequest(BaseModel):
+    """
+    Request schema for POST /search.
+
+    Attributes:
+    - query: The search query text
+    - k: Number of sources to return
+    - method: Retrieval method ("bm25" / "semantic" / "hybrid")
+    """
+    query: str
+    k: int = 5
+    method: str = "bm25"
+
+
+class SearchResponse(BaseModel):
+    """
+    Response schema for POST /search.
+
+    Attributes:
+    - query: The search query text
+    - k: Number of sources to return
+    - method: Retrieval method used ("bm25" / "semantic" / "hybrid")
+    - sources: Retrieved sources
+    """
+    query: str
+    k: int
+    method: str
+    sources: List[MinimalSource]
+
+
+class AnswerRequest(BaseModel):
+    """
+    Request schema for POST /answer.
+
+    Attributes:
+    - query: The question to answer
+    - k: Number of sources to retrieve as context for the answer
+    - method: Retrieval method ("bm25" / "semantic" / "hybrid")
+    """
+    query: str
+    k: int = 5
+    method: str = "bm25"
+
+
+class AnswerResponse(BaseModel):
+    """
+    Response schema for POST /answer.
+
+    Attributes:
+    - query: The question to answer
+    - k: Number of sources to retrieve as context for the answer
+    - method: Retrieval method used ("bm25" / "semantic" / "hybrid")
+    - sources: Retrieved sources used to generate answer
+    - answer: The generated answer text
+    """
+    query: str
+    k: int
+    method: str
+    sources: List[MinimalSource]
+    answer: str
+
+
+class HealthResponse(BaseModel):
+    """
+    Response schema for GET /health.
+
+    Attributes:
+    - status: Always "ok" while server is running
+    - index_loaded: True if either BM25 or semantic index is loaded
+    - bm25_index_loaded: True if BM25 index is loaded successfully
+    - semantic_index_loaded: True if semantic index is loaded successfully
+    """
+    status: str
+    index_loaded: bool
+    bm25_index_loaded: bool
+    semantic_index_loaded: bool
