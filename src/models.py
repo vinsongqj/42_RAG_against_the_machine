@@ -1,9 +1,47 @@
+"""
+Data models for the RAG pipeline.
+
+Ingestion and Indexing:
+- Chunk
+
+Retrieval and Ranking:
+- MinimalSource
+- MinimalSearchResults
+
+Generation:
+- MinimalAnswer
+
+Evaluation:
+- UnansweredQuestion
+- AnsweredQuestion
+- RagDataset
+- StudentSearchResults
+- StudentSearchResultsAndAnswer
+"""
+
 import uuid
 from typing import List, Optional, Union
 from pydantic import BaseModel, Field
 
 
-class CodeChunk(BaseModel):
+# ------------------------ INGESTION AND INDEXING -----------------------------
+
+
+class Chunk(BaseModel):
+    """
+    A single chunk of a source file created during ingestion/indexing.
+
+    Attributes:
+    - file_path: Absolute or relative path to the file.
+    - content: The chunk's raw text content
+    - first_character_index: Starting character offset of the chunk within
+                             the original file
+    - last_character_index: Ending character offset of the chunk within
+                            the original file
+    - score: Optional relevance score, set during retrieval
+    - bm25_text: Optional string combining chunk content and contextual
+                 metadata for BM25 indexing.
+    """
     file_path: str
     content: str
     first_character_index: int
@@ -12,41 +50,111 @@ class CodeChunk(BaseModel):
     bm25_text: Optional[str] = None
 
 
+# ------------------------ RETRIEVAL AND RANKING ------------------------------
+
+
 class MinimalSource(BaseModel):
+    """
+    Lightweight file-location pointer referencing a retrieved chunk without
+    including raw content or scores.
+
+    Attributes:
+    - file_path: Absolute or relative path to the file.
+    - first_character_index: Starting character offset of the chunk within
+                             the original file
+    - last_character_index: Ending character offset of the chunk within
+                            the original file
+    """
     file_path: str
     first_character_index: int
     last_character_index: int
 
 
-class UnansweredQuestion(BaseModel):
-    question_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    question: str
-
-
-class AnsweredQuestion(UnansweredQuestion):
-    sources: List[MinimalSource]
-    answer: str
-
-
-class RagDataset(BaseModel):
-    rag_questions: List[Union[AnsweredQuestion, UnansweredQuestion]]
-
-
 class MinimalSearchResults(BaseModel):
+    """
+    Retrieval result for a single unanswered question.
+
+    Attributes:
+    - question_id: The ID of the question the result belongs to
+    - question: The question text
+    - retrieved_sources: The sources retrieved for the question
+    """
     question_id: str
     question: str
     retrieved_sources: List[MinimalSource]
 
 
+# ---------------------------- GENERATION -------------------------------------
+
+
 class MinimalAnswer(MinimalSearchResults):
+    """
+    Extends MinimalSearchResults with an answer.
+
+    Attributes:
+    - answer: The generated answer from the LLM
+    """
     answer: str
 
 
+# ---------------------------- EVALUATION -------------------------------------
+
+
+class UnansweredQuestion(BaseModel):
+    """
+    A question without an answer, assigned a unique ID.
+
+    Attributes:
+    - question_id: An auto-generated unique ID
+    - question: The question text
+    """
+    question_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    question: str
+
+
+class AnsweredQuestion(UnansweredQuestion):
+    """
+    Extends UnansweredQuestion with the expected sources and answer.
+
+    Attributes:
+    - sources: The expected sources for the question
+    - answer: The expected answer text
+    """
+    sources: List[MinimalSource]
+    answer: str
+
+
+class RagDataset(BaseModel):
+    """
+    Container for AnsweredQuestions and UnansweredQuestions.
+
+    Attributes:
+    - rag_questions: A list of answered questions with expected sources and
+                     unanswered questions.
+    """
+    rag_questions: List[Union[AnsweredQuestion, UnansweredQuestion]]
+
+
 class StudentSearchResults(BaseModel):
+    """
+    Batch container holding MinimalSearchResults.
+
+    Attributes:
+    - search_results: A list of questions paired with file locations
+                      and generated answers.
+    - k: The number of top search results requested per question
+    """
     search_results: List[MinimalSearchResults]
     k: int
 
 
 class StudentSearchResultsAndAnswer(BaseModel):
+    """
+    Batch container holding MinimalAnswers.
+
+    Attributes:
+    - search_results: A list of questions paired with file locations.
+    - k: The number of top search results requested per question
+    """
     search_results: List[MinimalAnswer]
     k: int
