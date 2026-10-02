@@ -313,15 +313,18 @@ class node_evaluate,node_corpus,node_questions,node_ollama,node_results toneIndi
 
 ## Chunking strategy
 
-Instead of directly importing LangChain's libraries I opted to imitate their `RecursiveCharacterTextSplitter` and how they classified their Python and Markdown separators. `RecursiveCharacterTextSplitter` takes `chunk_size: int`, `chunk_overlap: int` and `separators: List[str]`. Based on the highest-priority separator in the list, it splits the text into chunks <= 2000 characters and if a chunk is too large, it will be split based on the next separator in the priority list, with the final fallback being to split by character.
+To avoid an external dependency on LangChain's libraries, I implemented my own version of their `RecursiveCharacterTextSplitter`. It takes `chunk_size: int`, `chunk_overlap: int` and `separators: List[str]`. It splits text on the first separator, packs the pieces that fit into chunks within `chunk_size` characters and splits any piece that is still too long by the next separator. The fallback is splitting by character. Default separators used: `"\n\n", "\n", " ", ""`
 
-Default separators used: `"\n\n", "\n", " ", ""`
+Chunks are capped at max 2000 characters. Chunk overlap carries characters from one chunk to the next to preserve context.
 
-Python separators used: `"\nclass ", "\ndef ", "\n\tdef ", "\n\n", "\n", " ", ""` (Prioritizes `class` and `def` to keep logic intact.)
+Chunking strategy depends on different file types:
 
-Markdown separators used: `"\n#{1,6} ", "\n\n", "\n", " ", ""` (Prioritizes headings and paragraphs to preserve document structure.)
+* Python files - Cut at class, function and method boundaries with the regex `(?=\n(?:class | (?:async )?def |    def ))`. Any longer split falls back to `RecursiveCharacterTextSplitter`. Uses `chunk_overlap` of 400 characters.
+  
+* Markdown files - Cut at every heading with the regex `(?=\n#{1,6}[ \t])`. Any longer split falls back to `RecursiveCharacterTextSplitter`. Each chunk is also indexed with a trail of parent headings (e.g. Setup > Install:) to improve keyword matches. Uses `chunk_overlap` of 300 characters.
 
-Besides that, the required max chunk size specified for this project is 2000 characters, and chunk overlap was set to 200 characters to preserve context between chunks.
+* Other files - Use `RecursiveCharacterTextSplitter` with extra sentence and clause separators `". ", "? ", "! ", "; ", ", "` between line breaks and spaces. Uses `chunk_overlap` of 250 characters.
+
 
 [↑ Back to Table of Contents](#rag-against-the-machine)
 

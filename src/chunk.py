@@ -128,7 +128,7 @@ class RecursiveCharacterTextSplitter:
 
 
 # Regex lookahead to ensure keywords stay in chunk during split
-_PYTHON_SECTIONS = re.compile(r"(?=\n(?:class | (?:async )?def |     def ))")
+_PYTHON_SECTIONS = re.compile(r"(?=\n(?:class | (?:async )?def |    def ))")
 
 
 def chunk_python(content: str, file_path: str,
