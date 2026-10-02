@@ -40,12 +40,12 @@ class Chunk(BaseModel):
 
     Attributes:
     - file_path: Absolute or relative path to the file.
-    - content: The chunk's raw text content
+    - content: The chunk's raw text content.
     - first_character_index: Starting character offset of the chunk within
-                             the original file
+                             the original file.
     - last_character_index: Ending character offset of the chunk within
-                            the original file
-    - score: Optional relevance score, set during retrieval
+                            the original file.
+    - score: Optional relevance score, set during retrieval.
     - bm25_text: Optional string combining chunk content and contextual
                  metadata for BM25 indexing.
     """
@@ -68,9 +68,9 @@ class MinimalSource(BaseModel):
     Attributes:
     - file_path: Absolute or relative path to the file.
     - first_character_index: Starting character offset of the chunk within
-                             the original file
+                             the original file.
     - last_character_index: Ending character offset of the chunk within
-                            the original file
+                            the original file.
     """
     file_path: str
     first_character_index: int
@@ -82,9 +82,9 @@ class MinimalSearchResults(BaseModel):
     Retrieval result for a single unanswered question.
 
     Attributes:
-    - question_id: The ID of the question the result belongs to
-    - question: The question text
-    - retrieved_sources: The sources retrieved for the question
+    - question_id: The ID of the question the result belongs to.
+    - question: The question text.
+    - retrieved_sources: The sources retrieved for the question.
     """
     question_id: str
     question: str
@@ -99,7 +99,7 @@ class MinimalAnswer(MinimalSearchResults):
     Extends MinimalSearchResults with an answer.
 
     Attributes:
-    - answer: The generated answer from the LLM
+    - answer: The generated answer from the LLM.
     """
     answer: str
 
@@ -112,8 +112,8 @@ class UnansweredQuestion(BaseModel):
     A question without an answer, assigned a unique ID.
 
     Attributes:
-    - question_id: An auto-generated unique ID
-    - question: The question text
+    - question_id: An auto-generated unique ID.
+    - question: The question text.
     """
     question_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     question: str
@@ -124,8 +124,8 @@ class AnsweredQuestion(UnansweredQuestion):
     Extends UnansweredQuestion with the expected sources and answer.
 
     Attributes:
-    - sources: The expected sources for the question
-    - answer: The expected answer text
+    - sources: The expected sources for the question.
+    - answer: The expected answer text.
     """
     sources: List[MinimalSource]
     answer: str
@@ -149,7 +149,7 @@ class StudentSearchResults(BaseModel):
     Attributes:
     - search_results: A list of questions paired with file locations
                       and generated answers.
-    - k: The number of top search results requested per question
+    - k: The number of top search results requested per question.
     """
     search_results: List[MinimalSearchResults]
     k: int
@@ -161,7 +161,7 @@ class StudentSearchResultsAndAnswer(BaseModel):
 
     Attributes:
     - search_results: A list of questions paired with file locations.
-    - k: The number of top search results requested per question
+    - k: The number of top search results requested per question.
     """
     search_results: List[MinimalAnswer]
     k: int
@@ -175,9 +175,9 @@ class SearchRequest(BaseModel):
     Request schema for POST /search.
 
     Attributes:
-    - query: The search query text
-    - k: Number of sources to return
-    - method: Retrieval method ("bm25" / "semantic" / "hybrid")
+    - query: The search query text.
+    - k: Number of sources to return.
+    - method: Retrieval method ("bm25" / "semantic" / "hybrid").
     """
     query: str
     k: int = 5
@@ -189,10 +189,10 @@ class SearchResponse(BaseModel):
     Response schema for POST /search.
 
     Attributes:
-    - query: The search query text
-    - k: Number of sources to return
-    - method: Retrieval method used ("bm25" / "semantic" / "hybrid")
-    - sources: Retrieved sources
+    - query: The search query text.
+    - k: Number of sources to return.
+    - method: Retrieval method used ("bm25" / "semantic" / "hybrid").
+    - sources: Retrieved sources.
     """
     query: str
     k: int
@@ -205,9 +205,9 @@ class AnswerRequest(BaseModel):
     Request schema for POST /answer.
 
     Attributes:
-    - query: The question to answer
-    - k: Number of sources to retrieve as context for the answer
-    - method: Retrieval method ("bm25" / "semantic" / "hybrid")
+    - query: The question to answer.
+    - k: Number of sources to retrieve as context for the answer.
+    - method: Retrieval method ("bm25" / "semantic" / "hybrid").
     """
     query: str
     k: int = 5
@@ -219,11 +219,11 @@ class AnswerResponse(BaseModel):
     Response schema for POST /answer.
 
     Attributes:
-    - query: The question to answer
-    - k: Number of sources to retrieve as context for the answer
-    - method: Retrieval method used ("bm25" / "semantic" / "hybrid")
-    - sources: Retrieved sources used to generate answer
-    - answer: The generated answer text
+    - query: The question to answer.
+    - k: Number of sources to retrieve as context for the answer.
+    - method: Retrieval method used ("bm25" / "semantic" / "hybrid").
+    - sources: Retrieved sources used to generate answer.
+    - answer: The generated answer text.
     """
     query: str
     k: int
@@ -237,10 +237,10 @@ class HealthResponse(BaseModel):
     Response schema for GET /health.
 
     Attributes:
-    - status: Always "ok" while server is running
-    - index_loaded: True if either BM25 or semantic index is loaded
-    - bm25_index_loaded: True if BM25 index is loaded successfully
-    - semantic_index_loaded: True if semantic index is loaded successfully
+    - status: Always "ok" while server is running.
+    - index_loaded: True if either BM25 or semantic index is loaded.
+    - bm25_index_loaded: True if BM25 index is loaded successfully.
+    - semantic_index_loaded: True if semantic index is loaded successfully.
     """
     status: str
     index_loaded: bool
