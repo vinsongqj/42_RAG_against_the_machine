@@ -1,5 +1,5 @@
 """
-Chunking utilities for the RAG pipeline.
+Chunking utilities for the RAG pipeline, used in ingest.py.
 
 This module has 3 chunking utilities:
 - chunk_python: For Python files.
@@ -26,10 +26,10 @@ class RecursiveCharacterTextSplitter:
         Initializes the splitter.
 
         Args:
-        - chunk_size: Max character limit of a chunk.
-        - chunk_overlap: Max number of characters carried over from the
-                         end of the last chunk to the next.
-        - separators: Separators to split by, from coarsest to finest.
+            - chunk_size: Max character limit of a chunk.
+            - chunk_overlap: Max number of characters carried over from the
+                             end of the last chunk to the next.
+            - separators: Separators to split by, from coarsest to finest.
         """
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
@@ -44,11 +44,11 @@ class RecursiveCharacterTextSplitter:
         chunk_size characters if there are no more separators left.
 
         Args:
-        - text: The text to split.
-        - separators: Separators to split by, from coarsest to finest.
+            - text: The text to split.
+            - separators: Separators to split by, from coarsest to finest.
 
         Returns:
-        The chunks in order within chunk size.
+            The chunks in order within chunk size.
         """
         # Return text if it already fits into chunk
         if len(text) <= self.chunk_size:
@@ -90,11 +90,11 @@ class RecursiveCharacterTextSplitter:
         start the next chunk, which creates the overlap.
 
         Args:
-        - splits: A list of splits smaller than chunk size.
+            - splits: A list of splits smaller than chunk size.
 
         Returns:
-        The merged chunks in order. Consecutive chunks may share pieces or
-        nothing if every piece is longer than chunk overlap.
+            The merged chunks in order. Consecutive chunks may share pieces or
+            nothing if every piece is longer than chunk overlap.
         """
         chunks: List[str] = []
         current_chunk: List[str] = []
@@ -119,10 +119,10 @@ class RecursiveCharacterTextSplitter:
         Public entry point to split text using chosen separators.
 
         Args:
-        - text: The text to split.
+            - text: The text to split.
 
         Returns:
-        The chunks in order within chunk size.
+            The chunks in order within chunk size.
         """
         return self._split_text(text, self.separators)
 
@@ -139,13 +139,13 @@ def chunk_python(content: str, file_path: str,
     if chunk exceeds chunk size.
 
     Args:
-    - content: The Python source code to be chunked.
-    - file_path: The source file path.
-    - chunk_size: Max char length of a chunk. 1000 by default.
+        - content: The Python source code to be chunked.
+        - file_path: The source file path.
+        - chunk_size: Max char length of a chunk. 1000 by default.
 
     Returns:
-    A list of Chunk objects containing Python code, file paths and
-    character offsets.
+        A list of Chunk objects containing Python code, file paths and
+        character offsets.
     """
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
@@ -177,13 +177,13 @@ def chunk_markdown(content: str, file_path: str,
     RecursiveCharacterTextSplitter if chunk exceeds chunk size.
 
     Args:
-    - content: The raw text of the Markdown file.
-    - file_path: The source file path.
-    - chunk size: Max char length of a chunk. 1200 by default.
+        - content: The raw text of the Markdown file.
+        - file_path: The source file path.
+        - chunk size: Max char length of a chunk. 1200 by default.
 
     Returns:
-    A list of Chunk objects containing text, file paths,
-    character offsets and BM25 search prefixes.
+        A list of Chunk objects containing text, file paths,
+        character offsets and BM25 search prefixes.
     """
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
@@ -224,13 +224,13 @@ def chunk_generic(content: str, file_path: str,
     RecursiveCharacterTextSplitter by default.
 
     Args:
-    - content: The raw text.
-    - file_path: The source file path.
-    - chunk size: Max char length of a chunk. 1000 by default.
+        - content: The raw text.
+        - file_path: The source file path.
+        - chunk size: Max char length of a chunk. 1000 by default.
 
     Returns:
-    A list of Chunk objects containing text, file paths and
-    character offsets.
+        A list of Chunk objects containing text, file paths and
+        character offsets.
     """
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
@@ -251,13 +251,13 @@ def _to_chunks(content: str, file_path: str,
     character index offsets.
 
     Args:
-    - content: The full text content of the source file.
-    - file_path: The source file path.
-    - splitter: The RecursiveCharacterTextSplitter instance
-                used to generate splits.
-    - splits: A list of raw text slices representing chunk contents.
-    - bm25_texts: An optional parallel list of trail text used for
-                  search indexing. None by default.
+        - content: The full text content of the source file.
+        - file_path: The source file path.
+        - splitter: The RecursiveCharacterTextSplitter instance
+                    used to generate splits.
+        - splits: A list of raw text slices representing chunk contents.
+        - bm25_texts: An optional parallel list of trail text used for
+                    search indexing. None by default.
 
     Returns:
         A list of Chunk objects containing text, file paths,
