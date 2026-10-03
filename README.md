@@ -129,7 +129,7 @@ Or across the entire dataset:
         
     uv run python -m src answer_dataset --student_search_results_path <path> --save_directory <directory>
 
-`answer` retrieves sources and genertes the answer in one step, so itaccepts these extra flags:
+`answer` retrieves sources and generates the answer in one step, so it accepts these extra flags:
 
 | Flag | Default | Description |
 |------|---------|-------------|
