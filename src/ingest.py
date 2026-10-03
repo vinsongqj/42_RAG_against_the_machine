@@ -27,42 +27,62 @@ def ingest_directory(target_dir: str, chunk_size: int = 1000) -> List[Chunk]:
     Chunks from all files.
 
     Raises:
-        ValueError: If a file under target_dir is outside current working
-        directory, so its relative path cannot be computed.
+        - FileNotFoundError: If target_dir does not exist.
+        - NotADirectoryError: If target_dir is a file and not a directory.
+        - RuntimeError: If target_dir cannot be accessed.
     """
     target_path = Path(target_dir).resolve()  # Get absolute path
+    if not target_path.exists():
+        raise FileNotFoundError(f"Raw data directory not found: {target_path}")
+    if not target_path.is_dir():
+        raise NotADirectoryError("Expected a directory but got a file:"
+                                 f" {target_path}")
+
     chunks: List[Chunk] = []
     # Recursively search all directories starting from target_path
-    files = list(target_path.rglob("*"))
+    try:
+        files = list(target_path.rglob("*"))
+    except OSError as e:
+        raise RuntimeError(f"Could not scan {target_path}: {e}") from e
+
+    skipped = 0
 
     for file_path in tqdm(files, desc="Ingesting files"):
-        if not file_path.is_file():
-            continue
-        # Breaks file path into tuple of parts and slices off file name
-        # Skips file if any part indicates a hidden folder
-        if any(part.startswith(".") for part in file_path.parts[:-1]):
-            continue
-
         try:
+            if not file_path.is_file():
+                continue
+            # Breaks file path into tuple of parts and slices off file name
+            # Skips file if any part indicates a hidden folder
+            if any(part.startswith(".") for part in file_path.parts[:-1]):
+                continue
+
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
-        except Exception as e:
-            print(f"Skipping {file_path}: {e}")
+
+            if not content:
+                continue
+
+            try:
+                relative_path = str(file_path.relative_to(Path.cwd()))
+            except ValueError:
+                relative_path = str(file_path)
+
+            if file_path.suffix == ".py":
+                file_chunks = chunk_python(content, relative_path, chunk_size)
+            elif file_path.suffix in (".md", ".markdown"):
+                file_chunks = chunk_markdown(content, relative_path,
+                                             chunk_size)
+            else:
+                file_chunks = chunk_generic(content, relative_path, chunk_size)
+            chunks.extend(file_chunks)
+
+        except Exception:
+            skipped += 1
+            tqdm.write(f"Skipping {file_path}")
             continue
-
-        if not content:
-            continue
-
-        # Path.cwd() gets current working directory
-        relative_path = str(file_path.relative_to(Path.cwd()))
-
-        if file_path.suffix == ".py":
-            file_chunks = chunk_python(content, relative_path, chunk_size)
-        elif file_path.suffix in (".md", ".markdown"):
-            file_chunks = chunk_markdown(content, relative_path, chunk_size)
-        else:
-            file_chunks = chunk_generic(content, relative_path, chunk_size)
-        chunks.extend(file_chunks)
 
     print(f"Total chunks created: {len(chunks)}")
+
+    if skipped:
+        print(f"Skipped {skipped} files due to errors.")
     return chunks

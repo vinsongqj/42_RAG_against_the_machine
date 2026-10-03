@@ -31,14 +31,25 @@ def build_index(raw_dir: str = "data/raw",
         - b: BM25 length normalization, from 0 to 1. Higher values penalize
              long chunks more.
         - build_semantic: Whether or not to build the semantic embedding index.
+
+    Raises:
+        - ValueError: If no indexable content is found in raw_dir.
+        - FileNotFoundError: If raw_dir does not exist.
+        - NotADirectoryError: If raw_dir is a file and not a directory.
+        - RuntimeError: If raw_dir cannot be accessed.
+        - OSError: If the BM25 index cannot be written to processed_dir.
     """
     query_cache.clear()
 
     chunks = ingest_directory(raw_dir, max_chunk_size)
+
+    if not chunks:
+        raise ValueError(f"No indexable content found in {raw_dir!r}")
+
     # Pydantic method model_dump() converts Chunk object into dict
     corpus_metadata = [chunk.model_dump() for chunk in chunks]
-    corpus_texts = [split_identifiers(chunk.bm25_text if chunk.bm25_text else
-                                      chunk.content for chunk in chunks)]
+    corpus_texts = [split_identifiers(chunk.bm25_text or chunk.content)
+                    for chunk in chunks]
     corpus_tokens = bm25s.tokenize(corpus_texts)
     retriever = bm25s.BM25(corpus=corpus_metadata, k1=k1, b=b)
     retriever.index(corpus_tokens)  # Creates matrix of scores
@@ -52,4 +63,7 @@ def build_index(raw_dir: str = "data/raw",
     print(f"Indexed {len(chunks)} chunks")
 
     if build_semantic:
-        build_vector_index(chunks, corpus_texts, processed_dir)
+        try:
+            build_vector_index(chunks, corpus_texts, processed_dir)
+        except Exception:
+            print("Semantic index build failed. BM25 index is still usable.")

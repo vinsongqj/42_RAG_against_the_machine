@@ -29,14 +29,21 @@ def _load_bm25(index_dir: str) -> Any:
         The loaded BM25 retriever with chunk metadata.
 
     Raises:
-        FileNotFoundError: If no BM25 index exists in index_dir.
+       - FileNotFoundError: If no BM25 index exists in index_dir.
+       - RuntimeError: If the index files exist but cannot be loaded
+                       due to corruption/incompleteness.
     """
     index_path = Path(index_dir) / "bm25_index"
     if not index_path.exists():
         raise FileNotFoundError(f"Index not found at {index_path}")
     print(f"Loading index from {index_path}...")
-    # load_corpus=True loads saved chunk metadata
-    retriever = bm25s.BM25.load(str(index_path), load_corpus=True)
+    try:
+        # load_corpus=True loads saved chunk metadata
+        retriever = bm25s.BM25.load(str(index_path), load_corpus=True)
+    except Exception as e:
+        raise RuntimeError(f"Could not load BM25 index at {index_path}."
+                           " Try rebuilding with the index command"
+                           ) from e
     print("Index loaded successfully!")
     return retriever
 
@@ -58,7 +65,9 @@ def _get_retriever(index_dir: str) -> Any:
         The loaded BM25 retriever.
 
     Raises:
-        FileNotFoundError: If no BM25 index exists in index_dir.
+        - FileNotFoundError: If no BM25 index exists in index_dir.
+        - RuntimeError: If the index cannot be loaded and no earlier copy
+                        is available to fall back on.
     """
     return _retriever_cache.get(index_dir, Path(index_dir) / "bm25_index")
 
@@ -71,7 +80,8 @@ def preload_retriever(index_dir: str = "data/processed") -> None:
         - index_dir: Directory of the built index.
 
     Raises:
-        FileNotFoundError: If no BM25 index exists in index_dir.
+        - FileNotFoundError: If no BM25 index exists in index_dir.
+        - RuntimeError: If the index files exist but cannot be loaded.
     """
     _get_retriever(index_dir)
 
@@ -118,10 +128,14 @@ def retrieve(query: str, k: int = 5, index_dir: str = "data/processed",
     Raises:
         - ValueError: If method is not recognized.
         - FileNotFoundError: If index has not been built.
+        - RuntimeError: If an index cannot be loaded, or
+                        semantic search fails.
     """
     if method not in _VALID_METHODS:
         raise ValueError(f"Unknown retrieval method {method!r} - "
                          f"expected one of {_VALID_METHODS}")
+    if not isinstance(query, str) or not query.strip():
+        raise ValueError("Query must be a non-empty string.")
 
     index_version = _index_version(index_dir, method)
     cache_key = (
@@ -131,7 +145,10 @@ def retrieve(query: str, k: int = 5, index_dir: str = "data/processed",
     if use_cache:
         cached = query_cache.get(cache_key)
         if cached is not None:
-            return [MinimalSource(**d) for d in cached]
+            try:
+                return [MinimalSource(**d) for d in cached]
+            except (TypeError, ValueError):
+                pass
 
     if method == "bm25":
         retriever = _get_retriever(index_dir)
