@@ -48,6 +48,8 @@ class QueryCache:
         Returns:
             A fixed length name without a file extension.
         """
+        # hashlib.md5().hexdigest() converts unsafe input strings
+        # into fixed length hexadecimal strings
         return hashlib.md5(key.encode()).hexdigest()
 
     def get(self, key: str) -> Optional[Any]:
@@ -82,6 +84,7 @@ class QueryCache:
             print(f"Could not read cache file {cache_file}", file=sys.stderr)
             return None
 
+        # Populates memory with disk result
         self.memory_cache[key] = result
         return result
 
@@ -95,6 +98,7 @@ class QueryCache:
             - key: The cache key.
             - value: The result to save. Must be plain data.
         """
+        # Saves value to memory
         self.memory_cache[key] = value
         if not self.disk_enabled:
             return
