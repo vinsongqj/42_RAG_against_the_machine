@@ -6,7 +6,7 @@ import bm25s
 from pathlib import Path
 from src.ingest import ingest_directory
 from src.rank import split_identifiers
-from src.semantic_embedding import build_vector_index
+from src.semantic import build_vector_index
 from src.cache import query_cache
 
 

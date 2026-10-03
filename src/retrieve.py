@@ -9,7 +9,7 @@ from src.models import MinimalSource
 from src.rank import bm25_search, hybrid_search
 from src.cache import query_cache
 from src.fingerprint import cached_dir_fingerprint, FingerprintedCache
-from src.semantic_embedding import semantic_search
+from src.semantic import semantic_search
 
 _VALID_METHODS = ("bm25", "semantic", "hybrid")
 DEFAULT_DOC_BOOST = 1.3
