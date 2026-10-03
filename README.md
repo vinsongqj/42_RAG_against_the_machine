@@ -24,13 +24,14 @@
   - [Glossary](#glossary)
     - [Retrieval Augmented Generation (RAG)](#retrieval-augmented-generation-rag)
     - [Corpus](#corpus)
+    - [Recall@k](#recallk)
     - [TF-IDF](#tf-idf)
     - [BM25](#bm25)
+    - [Reciprocal Rank Fusion](#reciprocal-rank-fusion)
     - [Semantic embedding](#semantic-embedding)
     - [Transformer](#transformer)
     - [MiniLM](#minilm)
     - [ChromaDB](#chromadb)
-    - [Recall@k](#recallk)
     - [tqdm](#tqdm)
     - [Fire](#fire)
   - [Resources](#resources)
@@ -361,8 +362,34 @@ Benefits:
 * Allows private data to be used without retraining.
 * Only relevant chunks are added to the query, reducing token usage.
 
+[↑ Back to Table of Contents](#rag-against-the-machine)
+
+---
+
 ### Corpus
 An external database of documents fed into a [RAG](#retrieval-augmented-generation-rag) pipeline.
+
+[↑ Back to Table of Contents](#rag-against-the-machine)
+
+---
+
+### Recall@k
+The percentage of relevant items in the corpus within the top k search results.
+
+$$\text{Recall@k} = \frac{\text{No. of relevant items found in top k}}{\text{Total no. of relevant items in corpus}}$$
+
+For example, a database has 10 python files alongside other file types. We are searching for .py files and looking at the top 5 results (k = 5):
+
+$$\text{Recall@5} = \frac{\text{4}}{\text{10}}$$
+
+* If 4 out of the 5 results are .py files, Recall@5 = 40% (4/10)
+* The remaining 6 .py files are outside the scope of k.
+
+The goal is to achieve the highest Recall@k score with the smallest k possible in order to save system memory.
+
+[↑ Back to Table of Contents](#rag-against-the-machine)
+
+---
 
 ### TF-IDF
 Term Frequency-Inverse Document Frequency (TF-IDF) is a ranking algorithm scores how important a word is to a specific document within a corpus.
@@ -374,9 +401,13 @@ The final score is TF x IDF.  High scores are assigned to unique words that appe
 
 Formula:
 
-$\text{TF-IDF}(t, d, D) = \text{TF}(t, d) \times \log\left(\frac{|D|}{1 + |\{d \in D : t \in d\}|}\right)$
+$$\text{TF-IDF}(t, d, D) = \text{TF}(t, d) \times \log\left(\frac{|D|}{1 + |\{d \in D : t \in d\}|}\right)$$
 
 > *Disclaimer: This formula is just for reference, I'm not a math major 😭 Fortunately for people like me, Python already has libraries that handle the math in the background.*
+
+[↑ Back to Table of Contents](#rag-against-the-machine)
+
+---
 
 ### BM25 
 Best Match (25th iteration) builds directly on [TF-IDF](#tf-idf) by fixing its two issues:
@@ -389,11 +420,33 @@ Best Match (25th iteration) builds directly on [TF-IDF](#tf-idf) by fixing its t
 
 Formula:
 
-$\text{Score}(D, Q) = \sum_{i=1}^{n} \text{IDF}(q_i) \times \frac{f(q_i, D) \cdot (k_1 + 1)}{f(q_i, D) + k_1 \cdot \left(1 - b + b \cdot \frac{|D|}{\text{avgdl}}\right)}$
+$$\text{Score}(D, Q) = \sum_{i=1}^{n} \text{IDF}(q_i) \times \frac{f(q_i, D) \cdot (k_1 + 1)}{f(q_i, D) + k_1 \cdot \left(1 - b + b \cdot \frac{|D|}{\text{avgdl}}\right)}$$
 
 The bm25s library is used to tokenize, index, retrieve and save/load the data from the disk in this project.
 
 > *Disclaimer: This formula is just for reference, I'm not a math major 😭 Fortunately for people like me, Python already has libraries that handle the math in the background.*
+
+[↑ Back to Table of Contents](#rag-against-the-machine)
+
+---
+
+### Reciprocal Rank Fusion
+Reciprocal Rank Fusion (RRF) is a method used in hybrid retrieval to combine results from multiple retrieval systems into a single ranked list.
+
+Instead of using raw score values since they vary depending on search algorithms (e.g. BM25, vector search), RRF looks at the ranking of each result in their respective lists. Items that are closer to the top across the lists earn a higher
+combined score.
+
+Formula:
+
+$$RRF\_Score(d \in D) = \sum_{r \in R} \frac{1}{k + r(d)}$$
+
+- $R$ is the set of rank lists returned by the search retrievers.
+- $r(d)$ is the rank of document $d$ within a list $r$
+- $k$ is a smoothing constant that prevents high ranked items in a single list to heavily influence the final score.
+
+[↑ Back to Table of Contents](#rag-against-the-machine)
+
+---
 
 ### Semantic embedding
 Keyword retrieval strategies like [BM25](#bm25) or [TF-IDF](#tf-idf) ignore semantic context. Semantic embedding solves this problem by categorizing words into multi-dimensional vectors. 
@@ -402,32 +455,32 @@ Context can be calculated based on the proximity of one word's vector coordinate
 
 For this project, a vector index is built using [MiniLM](#minilm) and stored in [ChromaDB](#chromadb).
 
+[↑ Back to Table of Contents](#rag-against-the-machine)
+
+---
+
 ### Transformer
 A transformer is an AI architecture that processes text in parallel. It reads an entire sentence all at once, instead of word by word. It uses an attention mechanism that acts as a highlighter for context clues within a sentence.
 
 For example, the word "it" changes meaning based on the context clues the transformer highlights:
 * Example A: "The chicken didn't cross the road because it was too tired." (it ➔ chicken is highlighted)
 * Example B: "The chicken didn't cross the road because it was too wide." (it ➔ road is highlighted)
-  
+
+[↑ Back to Table of Contents](#rag-against-the-machine)
+
 ### MiniLM
 MiniLM is a modern, CPU-efficient semantic embedding model that converts text using [transformers](#transformer) into 384-dimensional contextual vectors.
+
+[↑ Back to Table of Contents](#rag-against-the-machine)
+
+---
 
 ### ChromaDB
 ChromaDB is an open-source vector database used to store, manage and query vector embeddings. It stores the vectors converted by [MiniLM](#minilm) and retrieves the nearest neighbors using cosine similarity.
 
-### Recall@k
-The percentage of relevant items in the corpus within the top k search results.
+[↑ Back to Table of Contents](#rag-against-the-machine)
 
-$\text{Recall@k} = \frac{\text{No. of relevant items found in top k}}{\text{Total no. of relevant items in corpus}}$
-
-For example, a database has 10 python files alongside other file types. We are searching for .py files and looking at the top 5 results (k = 5):
-
-$\text{Recall@5} = \frac{\text{4}}{\text{10}}$
-
-* If 4 out of the 5 results are .py files, Recall@5 = 40% (4/10)
-* The remaining 6 .py files are outside the scope of k.
-
-The goal is to achieve the highest Recall@k score with the smallest k possible in order to save system memory.
+---
 
 ### tqdm
 tqdm is a function from the tqdm library that wraps an iterable to display a progress bar in the terminal.
@@ -444,7 +497,9 @@ Ingesting files: 100%|███████████████████�
                                      │                                 │            
                                Progress bar                Elapsed time/Est time left
 ```
+[↑ Back to Table of Contents](#rag-against-the-machine)
 
+---
 ### Fire
 Python Fire is an open-source CLI tool created by Google that exposes classes, functions or variables as executable CLI commands without the need for manually writing parsing code.
 
@@ -466,6 +521,8 @@ This allows you to call `index` directly from the CLI using `uv run python -m sr
 
 [↑ Back to Table of Contents](#rag-against-the-machine)
 
+---
+
 ## Resources
 
 * [Dictionary of AI Coding by Matt Pocock (used to understand AI terminologies)](https://www.aicodingdictionary.com/)
@@ -476,9 +533,12 @@ This allows you to call `index` directly from the CLI using `uv run python -m sr
 * [Learn Text Embeddings in 20 Minutes (full guide for beginners) by Thu Vu](https://youtu.be/Q6TBHDgWCDQ)
 * [What are Transformers (Machine Learning Model)? by IBM Technology](https://youtu.be/ZXiruGOCn9s)
 * [Getting Started with ChromaDB - Lowest Learning Curve Vector Database For Semantic Search by Johnny Code](https://youtu.be/QSW2L8dkaZk)
+* [Understanding Reciprocal Rank Fusion in Hybrid Search [Advanced RAG]](https://youtu.be/6dDvfGrxFns?si=o8wu7qPRwGEHx8rn)
+* [What is reciprocal rank fusion in hybrid search?](https://youtu.be/2uBcjEecr38?si=q0YUClgnXIbGAvRc)
 * [Never Forget Again! // Precision vs Recall with a Clear Example of Precision and Recall by Kimberly Fessel](https://youtu.be/qWfzIYCvBqo)
 * [Ollama CLI Reference](https://docs.ollama.com/cli)
 * [Python Progress Bars with tqdm - Visually Explained by Visually Explained](https://youtu.be/VAoGebgGTdM?si=sk6jt61YAuuFHBsg)
+* [Regular Expressions (Regex) - Visually Explained](https://youtu.be/V_DzcyGTXW0?si=UDGuffhbGDnEao1l)
 * [Markdown All in One by Yu Zhang (used for the table of contents)](https://marketplace.visualstudio.com/items?itemName=yzhang.markdown-all-in-one)
 * [GitDiagram (used to generate mermaid diagram for system architecture section)](https://gitdiagram.com/)
   
@@ -486,6 +546,6 @@ This allows you to call `index` directly from the CLI using `uv run python -m sr
 
 ### Disclosure of AI Usage
 
-DeepSeek was used to answer some more in-depth questions I had about chunking and retrieval, as well as error handling and finding edge cases in my pipeline, while Gemini was used for asking basic questions about topics such as tqdm and Fire CLI to make sure my glossary was acceptable, and how to include a table of contents, flowchart and LaTeX math in my readme.
+Claude/DeepSeek was used to answer some more in-depth questions I had about chunking and retrieval, as well as error handling and finding edge cases in my pipeline, while Gemini was used for asking basic questions about topics such as tqdm and Fire CLI to make sure my glossary was acceptable, and how to include a table of contents, flowchart and LaTeX math in my readme.
 
 [↑ Back to Table of Contents](#rag-against-the-machine)
