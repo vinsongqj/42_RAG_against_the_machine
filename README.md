@@ -320,11 +320,11 @@ Chunks are capped at max 2000 characters. Chunk overlap carries characters from 
 
 Chunking strategy depends on different file types:
 
-* Python files - Cut at class, function and method boundaries with the regex `(?=\n(?:class | (?:async )?def |    def ))`. Any longer split falls back to `RecursiveCharacterTextSplitter`. Uses `chunk_overlap` of 400 characters.
+* **Python files** - Cut at class, function and method boundaries with the regex `(?=\n(?:class | (?:async )?def |    def ))`. Any longer split falls back to `RecursiveCharacterTextSplitter`. Uses `chunk_overlap` of 400 characters.
   
-* Markdown files - Cut at every heading with the regex `(?=\n#{1,6}[ \t])`. Any longer split falls back to `RecursiveCharacterTextSplitter`. Each chunk is also indexed with a trail of parent headings (e.g. Setup > Install:) to improve keyword matches. Uses `chunk_overlap` of 300 characters.
+* **Markdown files** - Cut at every heading with the regex `(?=\n#{1,6}[ \t])`. Any longer split falls back to `RecursiveCharacterTextSplitter`. Each chunk is also indexed with a trail of parent headings (e.g. Setup > Install:) to improve keyword matches. Uses `chunk_overlap` of 300 characters.
 
-* Other files - Use `RecursiveCharacterTextSplitter` with extra sentence and clause separators `". ", "? ", "! ", "; ", ", "` between line breaks and spaces. Uses `chunk_overlap` of 250 characters.
+* **Other files** - Use `RecursiveCharacterTextSplitter` with extra sentence and clause separators `". ", "? ", "! ", "; ", ", "` between line breaks and spaces. Uses `chunk_overlap` of 250 characters.
 
 
 [↑ Back to Table of Contents](#rag-against-the-machine)
@@ -332,26 +332,26 @@ Chunking strategy depends on different file types:
 ## Retrieval method
 
 The retrieval process follows these steps:
-1. Prepare the text:
+1. **Prepare the text**:
    
    Each file in the [corpus](#corpus) is chunked. Names like `camelCase` and `snake_case` are split into separate words so searching something like "snake case" will have matches. Queries are processed the same way.
-2. Find matches:
+2. **Find matches**:
    
    One of the three methods are used:
    - [BM25](#bm25) (default)
    - [Semantic](#semantic-embedding)
    - Hybrid (uses both BM25 and semantic and combines results)
-3. Rank results:
+3. **Rank results**:
    - `doc_boost` (BM25): for "What is X" style queries, documentation files get a 1.3x score boost since these questions are expecting explanation instead of code.
    - Hybrid retrieval: BM25 and semantic methods are run and [RRF](#reciprocal-rank-fusion) is used to get the final combined ranks. Falls back to BM25 if semantic search fails.
-4. Prepare context for query:
+4. **Prepare context for query**:
    
    The top results are filtered before they reach the generation stage:
    - Very short chunks are dropped.
    - Documentation is favored over code.
    - Each chunk is widened to include text around it, then overlapping chunks are merged.
 
-Results are cached. Rebuilding the index automatically invalidates old entries.
+**Results are cached.** Rebuilding the index automatically invalidates old entries.
 
 [↑ Back to Table of Contents](#rag-against-the-machine)
 
@@ -360,6 +360,20 @@ Results are cached. Rebuilding the index automatically invalidates old entries.
 [↑ Back to Table of Contents](#rag-against-the-machine)
 
 ## Design decisions
+
+1. **File-specific chunking** - Python files are split along class and function boundaries, Markdown files at headers, and everything else by paragraphs and sentences. Markdown chunks include heading trails (Intro > Setup) so a chunk still makes sense.
+2. **Splitting code names into words** - `camelCase` and `snake_case` become separate words. This lets natural language questions match code at the cost of losing exact keyword matches.
+3. **[BM25](#bm25) by default and [semantic](#semantic-embedding) as optional** - Keyword search is fast and doesn't require embeddings.
+4. **[RRF](#reciprocal-rank-fusion) for hybrid search** - Results from both methods are merged by position and not score since BM25 scores and vector distances are not on the same scale.
+5. **`doc_boost` for conceptual queries** - "What is X" questions get a score boost for documentation files because an explanation is expected instead of code. Can be turned off by setting `doc_boost=1.0`. Only applies to BM25 searches.
+6. **Post-processing at the generation step** - Running generation tests on Qwen3-0.6B showed that it makes up URLs a lot and comments about "the provided documents" so `postprocess.py` was added to remove that kind of output.
+7. **Graceful failure**
+   - Broken caches are treated as cache misses.
+   - Failed semantic search falls back to BM25 in hybrid retrieval.
+   - Bad files are skipped during ingestion.
+   - Failed questions are skipped in batch runs.
+8. **Shared code across entry points** - The CLI and local HTTP API both use the same `retrieve()`, `generate_answer()` and `DEFAULT_DOC_BOOST`.
+9. **Automatic cache invalidation** - Cache keys include modification timestamps. Rebuilding the index makes old entries unreachable without clearing anything manually. The index also reloads itself when files change so the HTTP API can be updated without restarting.
 
 [↑ Back to Table of Contents](#rag-against-the-machine)
 
