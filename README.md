@@ -14,6 +14,7 @@
     - [3) Search](#3-search)
     - [4) Evaluate](#4-evaluate)
     - [5) Generate answers](#5-generate-answers)
+    - [6) Optional: Run the HTTP API](#6-optional-run-the-http-api)
   - [Example usage](#example-usage)
   - [System architecture](#system-architecture)
   - [Chunking strategy](#chunking-strategy)
@@ -40,7 +41,9 @@
 
 ## Description
 
-**RAG against the machine** is a Retrieval-Augmented Generation [(RAG)](#retrieval-augmented-generation-rag) project pipeline that ingests and indexes a provided codebase, retrieves the most relevant snippets for a question, hands them to a small local model (Qwen3-0.6B) to generate a grounded answer, and measures retrieval quality with [recall@k](#recallk).
+**RAG against the machine** is a Retrieval-Augmented Generation [(RAG)](#retrieval-augmented-generation-rag) pipeline that ingests and indexes a provided [corpus](#corpus), retrieves the most relevant snippets for a question, hands them to a small local model (Qwen3-0.6B) to generate a grounded answer, and measures retrieval quality with [recall@k](#recallk).
+
+Implemented features include a CLI built with [Fire](#fire), [BM25](#bm25) keyword search, [semantic embedding](#semantic-embedding) using [ChromaDB](#chromadb), hybrid retrieval using [Reciprocal Rank Fusion](#reciprocal-rank-fusion), query caching and a local HTTP API using FastAPI and Uvicorn.
 
 [↑ Back to Table of Contents](#rag-against-the-machine)
 
@@ -84,31 +87,75 @@ If you would like to run the program manually, you may follow the steps below:
 
 ### 2) Ingest and index
 
-    uv run python -m src index -max_chunk_size <int>
+    uv run python -m src index --max_chunk_size <int>
+
+To also build the semantic index (needed for `semantic` and `hybrid` search):
+
+    uv run python -m src index --max_chunk_size <int> --build_semantic True
     
 
 ### 3) Search
 For a single query:
   
-    uv run python -m src answer <query> -k <int>
+    uv run python -m src search "<query>" -k <int>
   
 Or across an entire dataset: 
         
-    uv run python -m src search dataset -dataset_path <path> -save_directory <directory>
+    uv run python -m src search_dataset --dataset_path <path> --k <int> --save_directory <directory>
+
+`search` and `search_dataset` accept these extra flags:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--method` | `bm25` | `bm25`, `semantic` or `hybrid`. The last two need the index built with `--build_semantic True`. |
+| `--doc_boost` | `1.3` | Score multiplier for documentation files on "What is X" style queries. Set to `1.0` to turn off. Only applies to BM25. |
+
+`search_dataset` also accepts `--use_cache <bool>` (default `False`).
+
+Example:
+
+    uv run python -m src search "What is continuous batching?" --k 5 --method hybrid
   
 ### 4) Evaluate
    
-    uv run python -m src evaluate –student_search_results_path <path> –dataset_path <path>
+    uv run python -m src evaluate --student_search_results_path <path> --dataset_path <path>
    
 ### 5) Generate answers
 For the single query:
         
-    uv run python -m src search <query> -k <int>
+    uv run python -m src answer "<query>" -k <int>
         
 Or across the entire dataset: 
         
-    uv run python -m src answer_dataset –student_search_results_path <path> –save_directory <directory>
-        
+    uv run python -m src answer_dataset --student_search_results_path <path> --save_directory <directory>
+
+`answer` retrieves sources and genertes the answer in one step, so itaccepts these extra flags:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--method` | `bm25` | `bm25`, `semantic` or `hybrid`. The last two need the index built with `--build_semantic True`. |
+| `--doc_boost` | `1.3` | Score multiplier for documentation files on "What is X" style queries. Set to `1.0` to turn off. Only applies to BM25. |
+
+Example:
+
+    uv run python -m src answer "What is continuous batching?" --k 5 --method hybrid
+
+### 6) Optional: Run the HTTP API
+    uv run python -m src api --host 127.0.0.1 --port 8000
+
+Interactive documentation is available at `http://127.0.0.1:8000/docs`.
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /health` | Reports whether the BM25 and semantic indexes are loaded. |
+| `POST /search` | Returns the retrieved sources. |
+| `POST /answer` | Returns the retrieved sources and a generated answer. Needs Ollama running. |
+
+Request body for `/search` and `/answer`:
+
+    {"query": "How does vLLM handle continuous batching?", "k": 5, "method": "bm25"}
+
+The API reads the index from `data/processed`. 
 
 [↑ Back to Table of Contents](#rag-against-the-machine)
 
