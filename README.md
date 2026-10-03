@@ -331,6 +331,28 @@ Chunking strategy depends on different file types:
 
 ## Retrieval method
 
+The retrieval process follows these steps:
+1. Prepare the text:
+   
+   Each file in the [corpus](#corpus) is chunked. Names like `camelCase` and `snake_case` are split into separate words so searching something like "snake case" will have matches. Queries are processed the same way.
+2. Find matches:
+   
+   One of the three methods are used:
+   - [BM25](#bm25) (default)
+   - [Semantic](#semantic-embedding)
+   - Hybrid (uses both BM25 and semantic and combines results)
+3. Rank results:
+   - `doc_boost` (BM25): for "What is X" style queries, documentation files get a 1.3x score boost since these questions are expecting explanation instead of code.
+   - Hybrid retrieval: BM25 and semantic methods are run and [RRF](#reciprocal-rank-fusion) is used to get the final combined ranks. Falls back to BM25 if semantic search fails.
+4. Prepare context for query:
+   
+   The top results are filtered before they reach the generation stage:
+   - Very short chunks are dropped.
+   - Documentation is favored over code.
+   - Each chunk is widened to include text around it, then overlapping chunks are merged.
+
+Results are cached. Rebuilding the index automatically invalidates old entries.
+
 [↑ Back to Table of Contents](#rag-against-the-machine)
 
 ## Performance analysis
