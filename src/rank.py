@@ -98,6 +98,7 @@ def bm25_search(retriever: Any, query: str, k: int,
         query_tokens = bm25s.tokenize([split_identifiers(query)],
                                       show_progress=False)
         boost = doc_boost if is_conceptual_query(query) else 1.0
+        # max must be >= 30, min returns k if corpus size > k and vice versa
         extra_candidates = min(corpus_size, k if boost == 1.0
                                else max(k * 4, 30))
         results, scores = retriever.retrieve(query_tokens, k=extra_candidates,
@@ -164,6 +165,8 @@ def reciprocal_rank_fusion(rankings: List[List[MinimalSource]],
         for rank, source in enumerate(ranking):
             key = _source_key(source)
             scores[key] += 1.0 / (rrf_constant + rank + 1)
+            # setdefault() prevents duplicating the source data
+            # if file is encountered in another list
             first_seen.setdefault(key, source)
 
     ranked_keys = sorted(scores, key=lambda key: scores[key], reverse=True)
