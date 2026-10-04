@@ -413,14 +413,13 @@ The retrieval process follows these steps:
 3. **[BM25](#bm25) by default and [semantic](#semantic-embedding) as optional** - Keyword search is fast and doesn't require embeddings.
 4. **[RRF](#reciprocal-rank-fusion) for hybrid search** - Results from both methods are merged by position and not score since BM25 scores and vector distances are not on the same scale.
 5. **`doc_boost` for conceptual queries** - "What is X" questions get a score boost for documentation files because an explanation is expected instead of code. Can be turned off by setting `doc_boost=1.0`. Only applies to BM25 searches.
-6. **Post-processing at the generation step** - Running generation tests on Qwen3-0.6B showed that it makes up URLs a lot and comments about "the provided documents" so `postprocess.py` was added to remove that kind of output.
-7. **Graceful failure**
+6. **Graceful failure**
    - Broken caches are treated as cache misses.
    - Failed semantic search falls back to BM25 in hybrid retrieval.
    - Bad files are skipped during ingestion.
    - Failed questions are skipped in batch runs.
-8. **Shared code across entry points** - The CLI and local HTTP API both use the same `retrieve()`, `generate_answer()` and `DEFAULT_DOC_BOOST`.
-9. **Automatic cache invalidation** - Cache keys include modification timestamps. Rebuilding the index makes old entries unreachable without clearing anything manually. The index also reloads itself when files change so the HTTP API can be updated without restarting.
+7. **Shared code across entry points** - The CLI and local HTTP API both use the same `retrieve()`, `generate_answer()` and `DEFAULT_DOC_BOOST`.
+8. **Automatic cache invalidation** - Cache keys include modification timestamps. Rebuilding the index makes old entries unreachable without clearing anything manually. The index also reloads itself when files change so the HTTP API can be updated without restarting.
 
 [↑ Back to Table of Contents](#rag-against-the-machine)
 
