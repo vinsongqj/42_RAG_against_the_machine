@@ -34,15 +34,19 @@ def dir_version(path: Path) -> str:
     except OSError:
         return "unreadable"
 
+    # For folders
     latest = 0.0
     try:
         for p in path.rglob("*"):
             try:
                 if p.is_file():
+                    # latest keeps track of the latest modification time
                     latest = max(latest, p.stat().st_mtime)
             except OSError:
+                # If file disappears mid scan
                 continue
     except OSError:
+        # If folder fails
         pass
     return str(int(latest))
 
@@ -67,10 +71,12 @@ def cached_dir_version(
         The version string.
     """
     key = str(path)
-    now = time.monotonic()
+    now = time.monotonic()  # monotonic() is a clock that only moves forward
     cached = _version_lifespan_cache.get(key)
+    # If current time - cached timestamp < lifespan, returns cached answer
     if cached is not None and now - cached[0] < lifespan:
         return cached[1]
+    # If no cache or cache is too old
     version = dir_version(path)
     _version_lifespan_cache[key] = (now, version)
     return version
@@ -129,10 +135,11 @@ class VersionCache:
             exists to fall back on.
         """
         current_version = cached_dir_version(version_path)
+        # If version hasn't changed, straight up return the stored object
         if (self._obj is not None and self._key == key
                 and current_version == self._version):
             return self._obj
-
+        # If version has changed, reload object
         try:
             obj = self._loader(key)
         except Exception as e:
