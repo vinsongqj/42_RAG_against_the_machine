@@ -5,6 +5,7 @@ Retrieves the most relevant sources for a query from the built indexes.
 from pathlib import Path
 from typing import Any, List
 import bm25s
+import sys
 from src.models import MinimalSource
 from src.rank import bm25_search, hybrid_search
 from src.cache import query_cache
@@ -36,7 +37,7 @@ def _load_bm25(index_dir: str) -> Any:
     index_path = Path(index_dir) / "bm25_index"
     if not index_path.exists():
         raise FileNotFoundError(f"Index not found at {index_path}")
-    print(f"Loading index from {index_path}...")
+    print(f"Loading index from {index_path}...", file=sys.stderr)
     try:
         # load_corpus=True loads saved chunk metadata
         retriever = bm25s.BM25.load(str(index_path), load_corpus=True)
@@ -44,7 +45,7 @@ def _load_bm25(index_dir: str) -> Any:
         raise RuntimeError(f"Could not load BM25 index at {index_path}."
                            " Try rebuilding with the index command"
                            ) from e
-    print("Index loaded successfully!")
+    print("Index loaded successfully!", file=sys.stderr)
     return retriever
 
 

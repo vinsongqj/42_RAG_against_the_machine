@@ -203,7 +203,8 @@ def hybrid_search(retriever: Any, query: str, k: int, index_dir: str,
     try:
         semantic = semantic_search(query, extra_candidates, index_dir)
     except Exception as e:
-        print(f"Semantic search unavailable ({e}), using BM25 only ranking.")
+        print(f"Semantic search unavailable ({e}), using BM25 only ranking.",
+              file=sys.stderr)
         semantic = []
 
     fused = reciprocal_rank_fusion([lexical, semantic])
