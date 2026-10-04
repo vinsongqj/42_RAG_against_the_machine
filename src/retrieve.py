@@ -8,7 +8,7 @@ import bm25s
 from src.models import MinimalSource
 from src.rank import bm25_search, hybrid_search
 from src.cache import query_cache
-from src.fingerprint import cached_dir_fingerprint, FingerprintedCache
+from src.version import cached_dir_version, VersionCache
 from src.semantic import semantic_search
 
 _VALID_METHODS = ("bm25", "semantic", "hybrid")
@@ -49,7 +49,7 @@ def _load_bm25(index_dir: str) -> Any:
 
 
 # Holds loaded index
-_retriever_cache = FingerprintedCache(_load_bm25)
+_retriever_cache = VersionCache(_load_bm25)
 
 
 def _get_retriever(index_dir: str) -> Any:
@@ -97,14 +97,14 @@ def _index_version(index_dir: str, method: str) -> str:
         - method: Retrieval method which decides which indexes are checked.
 
     Returns:
-        The index fingerprints for the method, joined with dashes.
+        The version of each index used by the method, joined with dashes.
     """
     paths = []
     if method in ("bm25", "hybrid"):
         paths.append(Path(index_dir) / "bm25_index")
     if method in ("semantic", "hybrid"):
         paths.append(Path(index_dir) / "chroma")
-    return "-".join(cached_dir_fingerprint(p) for p in paths)
+    return "-".join(cached_dir_version(p) for p in paths)
 
 
 def retrieve(query: str, k: int = 5, index_dir: str = "data/processed",
