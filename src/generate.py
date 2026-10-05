@@ -85,6 +85,7 @@ def select_sources(sources: List[MinimalSource], top_k: int,
 
 def _get_context_spans(sources: List[MinimalSource],
                        padding: int) -> List[Tuple[str, int, int]]:
+    # Empty dict to insert file path keys with lists of spans
     spans_per_file: Dict[str, List[Tuple[int, int, int]]] = defaultdict(list)
     for rank, src in enumerate(sources):
         start = max(0, src.first_character_index - padding)
