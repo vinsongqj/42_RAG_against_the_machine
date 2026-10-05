@@ -1,143 +1,95 @@
 import json
 import re
+import textwrap
 import urllib.error
 import urllib.request
 from collections import defaultdict
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from src.models import MinimalSource
 
+
 OLLAMA_HOST = "http://localhost:11434"
-MODEL_ID = "qwen3:0.6b"
-_KEEP_ALIVE = "30m"
-_REQUEST_TIMEOUT_SECONDS = 120
-
-_FILLER_PREFIX_RE = re.compile(
-    r"^(the answer is:?|based on the (provided )?context,?|"
-    r"according to the context,?|answer:?)\s*",
-    re.IGNORECASE,
+DEFAULT_MODEL = "qwen3:0.6b"
+_REQUEST_TIMEOUT_SECS = 120
+_ENUMERATION_QUERY = re.compile(
+    r"""
+    \b(what|which)\b
+    [^?.]*
+    \b(models?|formats?|platforms?|backends?|versions?|options?|types?)\b
+    [^?.]*
+    \b(support|supports|supported|available)\b
+    | \blist\b
+    | \benumerate\b
+    """,
+    re.VERBOSE | re.IGNORECASE,
 )
-
-_MD_LINK_RE = re.compile(r"\[([^\]\n]+)\]\((https?://[^\s)]+)\)")
-_BARE_URL_RE = re.compile(r"https?://[^\s)]+")
-
-_ENUMERATION_QUERY_RE = re.compile(
-    r"\b(what|which)\b[^?.]*\b(models?|formats?|platforms?|backends?|versions?|options?|types?)\b"
-    r"[^?.]*\b(support|supports|supported|available)\b"
-    r"|\blist\b|\benumerate\b",
-    re.IGNORECASE,
-)
-
-_META_COMMENTARY_RE = re.compile(
-    r"\bprovided (document|documents|context|text)\b"
-    r"|\bnot (explicitly )?(mentioned|specified|provided)\b.{0,25}\b(document|documents|context)s?\b"
-    r"|\bbased on\b.{0,40}\b(information|context)\b"
-    r"|\bthe answer would be\b"
-    r"|\bthe information given\b",
-    re.IGNORECASE,
-)
-
-_SENTENCE_SPLIT_RE = re.compile(r'(?<=[a-z0-9)"\'])([.!?]+)\s+(?=[A-Z"])')
-
-
-def _strip_filler_prefix(text: str) -> str:
-    previous = None
-    while previous != text:
-        previous = text
-        text = _FILLER_PREFIX_RE.sub("", text, count=1).lstrip()
-    return text
-
-
-def _ground_urls(answer: str, context: str) -> str:
-    def _replace_markdown_link(match: "re.Match[str]") -> str:
-        label, url = match.group(1), match.group(2)
-        return match.group(0) if url in context else label
-
-    def _replace_bare_url(match: "re.Match[str]") -> str:
-        url = match.group(0)
-        return url if url in context else ""
-
-    answer = _MD_LINK_RE.sub(_replace_markdown_link, answer)
-    answer = _BARE_URL_RE.sub(_replace_bare_url, answer)
-    return re.sub(r"[ \t]{2,}", " ", answer)
 
 
 def _is_enumeration_query(question: str) -> bool:
-    return bool(_ENUMERATION_QUERY_RE.search(question))
-
-
-def _strip_meta_commentary(text: str) -> str:
-    lines = text.split("\n")
-    cleaned_lines = []
-    for line in lines:
-        if not line.strip():
-            cleaned_lines.append(line)
-            continue
-        marked = _SENTENCE_SPLIT_RE.sub(lambda m: m.group(1) + "\x00", line)
-        sentences = marked.split("\x00")
-        kept = [s for s in sentences if not _META_COMMENTARY_RE.search(s)]
-        cleaned_line = " ".join(s.strip() for s in kept if s.strip())
-        cleaned_lines.append(cleaned_line if cleaned_line else line)
-    cleaned = "\n".join(cleaned_lines).strip(" \n\"")
-    return cleaned if cleaned.strip() else text
+    return bool(_ENUMERATION_QUERY.search(question))
 
 
 def _call_ollama(prompt: str, max_new_tokens: int) -> str:
-    payload: Dict[str, Any] = {
-        "model": MODEL_ID,
+    config: Dict[str, Any] = {
+        "model": DEFAULT_MODEL,
         "prompt": prompt,
-        "stream": False,
-        "think": False,
-        "keep_alive": _KEEP_ALIVE,
+        "stream": False,  # Waits for complete response before returning
+        "think": False,  # Turn off reasoning tokens and return final answer
+        "keep_alive": "30m",  # How long to keep the model in memory
         "options": {
-            "temperature": 0.1,
-            "top_p": 0.8,
-            "num_predict": max_new_tokens,
-        },
+            "temperature": 0.1,  # Reduces creative or random responses
+            "top_p": 0.8,  # Considers 80% of likely tokens (recommended)
+            "num_predict": max_new_tokens,  # Max tokens for response
+            "num_ctx": 4096  # Context window allocated in memory
+        }
     }
+    # Creates a POST request for Ollama's API containing config
     request = urllib.request.Request(
         f"{OLLAMA_HOST}/api/generate",
-        data=json.dumps(payload).encode("utf-8"),
+        data=json.dumps(config).encode("utf-8"),
         headers={"Content-Type": "application/json"},
-        method="POST",
+        method="POST"
     )
 
     try:
-        with urllib.request.urlopen(request, timeout=_REQUEST_TIMEOUT_SECONDS) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
+        # Sends a POST request to Ollama with a timeout limit
+        with urllib.request.urlopen(request,
+                                    timeout=_REQUEST_TIMEOUT_SECS) as response:
+            body = json.loads(response.read().decode("utf-8"))
     except urllib.error.URLError as e:
         raise RuntimeError(
-            f"Could not reach Ollama at {OLLAMA_HOST}. Is `ollama serve` "
-            f"running, and has `ollama pull {MODEL_ID}` been run? ({e})"
+            f"Could not get a response from Ollama at {OLLAMA_HOST} ({e}), "
+            f"Try running `ollama serve`, then `ollama pull {DEFAULT_MODEL}`"
         ) from e
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode("utf-8", errors="ignore")
+    except TimeoutError as e:
         raise RuntimeError(
-            f"Ollama returned HTTP {e.code} for model {MODEL_ID!r}: {detail}. "
-            f"If the model isn't pulled yet, run `ollama pull {MODEL_ID}`."
+            f"Ollama did not respond within {_REQUEST_TIMEOUT_SECS}s."
         ) from e
+    # Extracts output from JSON response and trims whitespace
+    return str(body.get("response", "")).strip()
 
-    return _strip_filler_prefix(str(body.get("response", "")).strip())
 
-
-def select_sources(sources, top_k, min_chars=150):
-    size = lambda s: s.last_character_index - s.first_character_index
-    kept = [s for s in sources if size(s) >= min_chars] or sources
+def select_sources(sources: List[MinimalSource], top_k: int,
+                   min_chars: int = 150) -> List[MinimalSource]:
+    # Filters out sources shorter than min chars unless all sources are small
+    kept = [s for s in sources
+            if (s.last_character_index - s.first_character_index) >= min_chars
+            ] or sources
     docs = [s for s in kept if s.file_path.endswith(".md")]
     code = [s for s in kept if not s.file_path.endswith(".md")]
+    # At least 2 .md files
     if len(docs) >= 2:
         return docs[:top_k]
     return (docs + code)[:top_k]
 
 
-def _expand_and_merge_windows(
-    sources: List[MinimalSource], window_chars: int,
-) -> List[Tuple[str, int, int]]:
+def _expand_and_merge_windows(sources: List[MinimalSource],
+                              window_chars: int) -> List[Tuple[str, int, int]]:
     windows_by_file: Dict[str, List[Tuple[int, int, int]]] = defaultdict(list)
     for rank, src in enumerate(sources):
         start = max(0, src.first_character_index - window_chars)
         end = src.last_character_index + window_chars
         windows_by_file[src.file_path].append((start, end, rank))
-
     merged: List[Tuple[str, int, int, int]] = []
     for file_path, windows in windows_by_file.items():
         windows.sort(key=lambda w: w[0])
@@ -150,28 +102,25 @@ def _expand_and_merge_windows(
                 merged.append((file_path, cur_start, cur_end, cur_rank))
                 cur_start, cur_end, cur_rank = start, end, rank
         merged.append((file_path, cur_start, cur_end, cur_rank))
-
     merged.sort(key=lambda m: m[3])
     return [(file_path, start, end) for file_path, start, end, _ in merged]
 
 
-def generate_answer(question: str, sources: List[MinimalSource], max_new_tokens: int = 256, top_k: int = 6,
+def generate_answer(question: str, sources: List[MinimalSource],
+                    max_new_tokens: int = 256, top_k: int = 6,
                     context_window_chars: int = 1500,
-                    enumeration_context_window_chars: int = 4000,
+                    enum_context_window_chars: int = 4000,
                     max_span_chars: int = 3000) -> str:
-
     sources = select_sources(sources, top_k)
     if not sources:
         return "No relevant sources retrieved."
-
     is_enumeration = _is_enumeration_query(question)
-
     max_context_chars = 12000
     context_parts: List[str] = []
     total_chars = 0
-    file_cache: Dict[str, str] = {}
-
-    effective_window_chars = enumeration_context_window_chars if is_enumeration else context_window_chars
+    file_cache: Dict[str, Optional[str]] = {}
+    effective_window_chars = (enum_context_window_chars if is_enumeration
+                              else context_window_chars)
     spans = _expand_and_merge_windows(sources, effective_window_chars)
 
     for file_path, start, end in spans:
@@ -180,55 +129,60 @@ def generate_answer(question: str, sources: List[MinimalSource], max_new_tokens:
                 with open(file_path, "r", encoding="utf-8") as f:
                     file_cache[file_path] = f.read()
             except Exception:
-                file_cache[file_path] = f"[Could not read file: {file_path}]"
+                print(f"Warning: could not read {file_path}; skipping...")
+                file_cache[file_path] = None
         content = file_cache[file_path]
-
-        end = min(end, start + max_span_chars)
-        snippet = content[start:min(end, len(content))]
+        if content is None or start >= len(content):
+            continue
+        snippet = content[start:min(end, start + max_span_chars)]
         part = f"File: {file_path}\n```\n{snippet}\n```"
 
         if not context_parts and len(part) > max_context_chars:
             part = part[:max_context_chars] + "\n...[truncated]"
         elif context_parts and total_chars + len(part) > max_context_chars:
             break
-
         context_parts.append(part)
         total_chars += len(part)
+
+    if not context_parts:
+        return "No readable sources to answer from."
 
     if len(context_parts) < len(spans):
         print(f"Using top {len(context_parts)}/{len(spans)} spans "
               f"({total_chars} chars) to stay within the context budget.")
-
     context = "\n\n".join(context_parts)
 
     if is_enumeration:
         answer_style_rule = (
-            "- This question asks for a list: enumerate every specific item named in the "
-            "documents (e.g. model names, formats, platforms) rather than summarizing them as a category."
+            "- This question asks for a list: enumerate every specific "
+            "item named in the documents "
+            "(e.g. model names, formats, platforms) "
+            "rather than summarizing them as a category."
         )
     else:
         answer_style_rule = (
-            "- Explain the key idea directly in 2-4 sentences, using the precise terms and "
-            "concepts the documents use rather than a generic paraphrase."
+            "- Explain the key idea directly in 2-4 sentences, "
+            "using the precise terms and concepts the documents use "
+            "rather than a generic paraphrase."
         )
 
-    prompt = f"""You are a technical assistant for the vLLM codebase and documentation.
-Answer the question using only the documents below.
+    prompt = textwrap.dedent(f"""\
+    You are a technical assistant for the vLLM codebase and documentation.
+    Answer the question using only the documents below.
 
-Rules:
-{answer_style_rule}
-- If the documents contain commands, code, or steps, include them.
-- Never mention "the context", "the documents", or "the provided text".
-- Do not add facts that are not in the documents.
-- If the documents do not answer the question, say only: "I could not find this in the documentation."
+    Rules:
+    {answer_style_rule}
+    - If the documents contain commands, code, or steps, include them.
+    - Never mention "the context", "the documents", or "the provided text".
+    - Do not add facts that are not in the documents.
+    - If the documents do not answer the question, say only: \
+    "I could not find this in the documentation."
 
-Documents:
-{context}
+    Documents:
+    {context}
 
-Question: {question}
+    Question: {question}
 
-Answer:"""
+    Answer:""")
 
-    answer = _call_ollama(prompt, max_new_tokens)
-    answer = _ground_urls(answer, context)
-    return _strip_meta_commentary(answer)
+    return _call_ollama(prompt, max_new_tokens)
