@@ -83,33 +83,33 @@ def select_sources(sources: List[MinimalSource], top_k: int,
     return (docs + code)[:top_k]
 
 
-def _expand_and_merge_windows(sources: List[MinimalSource],
-                              window_chars: int) -> List[Tuple[str, int, int]]:
-    windows_by_file: Dict[str, List[Tuple[int, int, int]]] = defaultdict(list)
+def _get_context_spans(sources: List[MinimalSource],
+                       padding: int) -> List[Tuple[str, int, int]]:
+    spans_per_file: Dict[str, List[Tuple[int, int, int]]] = defaultdict(list)
     for rank, src in enumerate(sources):
-        start = max(0, src.first_character_index - window_chars)
-        end = src.last_character_index + window_chars
-        windows_by_file[src.file_path].append((start, end, rank))
-    merged: List[Tuple[str, int, int, int]] = []
-    for file_path, windows in windows_by_file.items():
-        windows.sort(key=lambda w: w[0])
-        cur_start, cur_end, cur_rank = windows[0]
-        for start, end, rank in windows[1:]:
+        start = max(0, src.first_character_index - padding)
+        end = src.last_character_index + padding
+        spans_per_file[src.file_path].append((start, end, rank))
+    result: List[Tuple[str, int, int, int]] = []
+    for file_path, spans in spans_per_file.items():
+        spans.sort(key=lambda w: w[0])
+        cur_start, cur_end, cur_rank = spans[0]
+        for start, end, rank in spans[1:]:
             if start <= cur_end:
                 cur_end = max(cur_end, end)
                 cur_rank = min(cur_rank, rank)
             else:
-                merged.append((file_path, cur_start, cur_end, cur_rank))
+                result.append((file_path, cur_start, cur_end, cur_rank))
                 cur_start, cur_end, cur_rank = start, end, rank
-        merged.append((file_path, cur_start, cur_end, cur_rank))
-    merged.sort(key=lambda m: m[3])
-    return [(file_path, start, end) for file_path, start, end, _ in merged]
+        result.append((file_path, cur_start, cur_end, cur_rank))
+    result.sort(key=lambda m: m[3])
+    return [(file_path, start, end) for file_path, start, end, _ in result]
 
 
 def generate_answer(question: str, sources: List[MinimalSource],
                     max_new_tokens: int = 256, top_k: int = 6,
-                    context_window_chars: int = 1500,
-                    enum_context_window_chars: int = 4000,
+                    padding: int = 1500,
+                    enum_padding: int = 4000,
                     max_span_chars: int = 3000) -> str:
     sources = select_sources(sources, top_k)
     if not sources:
@@ -119,9 +119,9 @@ def generate_answer(question: str, sources: List[MinimalSource],
     context_parts: List[str] = []
     total_chars = 0
     file_cache: Dict[str, Optional[str]] = {}
-    effective_window_chars = (enum_context_window_chars if is_enumeration
-                              else context_window_chars)
-    spans = _expand_and_merge_windows(sources, effective_window_chars)
+    chosen_padding = (enum_padding if is_enumeration
+                      else padding)
+    spans = _get_context_spans(sources, chosen_padding)
 
     for file_path, start, end in spans:
         if file_path not in file_cache:
