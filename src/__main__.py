@@ -11,10 +11,8 @@ import json
 from pathlib import Path
 import sys
 from typing import Optional
-
 import fire
 from tqdm import tqdm
-
 from src.api import run_api
 from src.evaluate import compute_recall
 from src.generate import generate_answer
