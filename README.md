@@ -26,6 +26,7 @@
     - [Retrieval Augmented Generation (RAG)](#retrieval-augmented-generation-rag)
     - [Corpus](#corpus)
     - [Recall@k](#recallk)
+    - [IoU](#iou)
     - [TF-IDF](#tf-idf)
     - [BM25](#bm25)
     - [Reciprocal Rank Fusion](#reciprocal-rank-fusion)
@@ -467,12 +468,20 @@ $$\text{Recall@5} = \frac{\text{4}}{\text{10}}$$
 * If 4 out of the 5 results are .py files, Recall@5 = 40% (4/10)
 * The remaining 6 .py files are outside the scope of k.
 
-The goal is to achieve the highest Recall@k score with the smallest k possible in order to save system memory.
+The goal is to achieve the highest Recall@k score with the smallest k possible in order to save system memory. To determined if a source is "retrieved", it needs to share the same file path and have an [IoU](#iou) score of >= 0.05 
 
 [↑ Back to Table of Contents](#rag-against-the-machine)
 
 ---
 
+### IoU
+Intersection-over-Union (IoU) is the length of overlap between two spans divided by the length of their combined extent. The threshold of 0.05 is set to determine if a file can be considered "retrieved".
+
+$$\mathrm{IoU} = \frac{|A \cap B|}{|A \cup B|}$$
+
+[↑ Back to Table of Contents](#rag-against-the-machine)
+
+---
 ### TF-IDF
 Term Frequency-Inverse Document Frequency (TF-IDF) is a ranking algorithm scores how important a word is to a specific document within a corpus.
 
