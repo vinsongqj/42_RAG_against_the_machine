@@ -456,7 +456,7 @@ Retrieval performance is evaluated using [**Recall@k**](#recallk) across private
 ### Summary
 * **Docs Dataset:** Achieves a **0.9100** Recall@10 due to structured header chunking and the `doc_boost` multiplier on conceptual queries.
 * **Code Dataset:** Achieves an **0.8500** Recall@10 by splitting `camelCase` and `snake_case` identifiers into individual tokens, allowing natural language queries to hit exact code symbols.
-* Indexing completed in 9 seconds
+* Indexing completed in 9 seconds.
 * Warm retrieval throughput retrieved 200 questions in 4 seconds.
 
 [↑ Back to Table of Contents](#rag-against-the-machine)
