@@ -81,7 +81,7 @@ clean:
 	@find . -type f -name "*.pyc" -delete
 	@find . -type f -name "*.pyo" -delete
 	@find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
-	@rm -rf data/cache data/output data/processed 2>/dev/null || true
+	@rm -rf data/cache data/output data/processed .venv 2>/dev/null || true
 	@echo "Cleanup done!"
 
 lint:
