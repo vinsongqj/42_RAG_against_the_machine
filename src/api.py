@@ -106,7 +106,7 @@ async def health() -> HealthResponse:
     )
 
 
-@app.get("/search", response_model=SearchResponse)
+@app.post("/search", response_model=SearchResponse)
 @_http_error
 async def api_search(request: SearchRequest) -> SearchResponse:
     """
