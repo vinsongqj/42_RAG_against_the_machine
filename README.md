@@ -298,6 +298,9 @@ curl 'http://127.0.0.1:8000/search?query=How+does+vLLM+handle+continuous+batchin
 curl 'http://127.0.0.1:8000/answer?query=What+is+continuous+batching%3F&k=5&method=bm25'
 ```
 
+[↑ Back to Table of Contents](#rag-against-the-machine)
+
+
 ## System architecture
 
 ```mermaid
