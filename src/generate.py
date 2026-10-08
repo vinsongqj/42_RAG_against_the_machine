@@ -1,3 +1,8 @@
+"""
+Uses the retrieved chunks to add context to the prompt
+and generate the final answer.
+"""
+
 import json
 import re
 import textwrap
@@ -26,10 +31,33 @@ _ENUMERATION_QUERY = re.compile(
 
 
 def _is_enumeration_query(question: str) -> bool:
+    """
+    Checks if a query asks for enumeration.
+
+    Args:
+        - question: The query text.
+
+    Returns:
+        True if the query matches the enumeration query regex structure.
+    """
     return bool(_ENUMERATION_QUERY.search(question))
 
 
 def _call_ollama(prompt: str, max_new_tokens: int) -> str:
+    """
+    Calls the chosen LLM via Ollama.
+
+    Args:
+        - prompt: The prompt to input into the LLM with attached context.
+        - max_new_tokens: Maximum amount of tokens allowed for the response.
+
+    Returns:
+        The output extracted from the JSON with whitespace stripped.
+
+    Raises:
+        - RuntimeError: If the model is unresponsive or times out.
+
+    """
     config: Dict[str, Any] = {
         "model": DEFAULT_MODEL,
         "prompt": prompt,
@@ -71,6 +99,21 @@ def _call_ollama(prompt: str, max_new_tokens: int) -> str:
 
 def select_sources(sources: List[MinimalSource], top_k: int,
                    min_chars: int = 150) -> List[MinimalSource]:
+    """
+    Selects and prioritizes sources based on length and file type.
+    Filters out sources shorter than min_chars unless all sources
+    are small, then prioritizes .md files.
+
+    Args:
+        - sources: A list of MinimalSource objects to filter and select from.
+        - top_k: The maximum number of sources to return.
+        - min_chars: The minimum character count required for a source to
+                     be kept.
+
+    Returns:
+        A list of the top_k selected MinimalSource objects, prioritizing more
+        .md files
+    """
     # Filters out sources shorter than min chars unless all sources are small
     kept = [s for s in sources
             if (s.last_character_index - s.first_character_index) >= min_chars
@@ -85,12 +128,29 @@ def select_sources(sources: List[MinimalSource], top_k: int,
 
 def _get_context_spans(sources: List[MinimalSource],
                        padding: int) -> List[Tuple[str, int, int]]:
+    """
+    Widens chunks by adding padding and merges chunks with overlaps
+    if they share the same file path, then sorts everything based
+    on rank into a list of tuples containing the modified chunks
+    and start and end indexes.
+
+    Args:
+        - sources: List of MinimalSource objects in ranked order, with
+                   file path and start and end characters.
+        - padding: How many extra characters to add on each side.
+
+    Returns:
+        A list of tuples containing the file path and padded start and end
+        indexes, sorted in ascneding order of original source rank.
+    """
     # Empty dict to insert file path keys with lists of spans
     spans_per_file: Dict[str, List[Tuple[int, int, int]]] = defaultdict(list)
     for rank, src in enumerate(sources):
         start = max(0, src.first_character_index - padding)
         end = src.last_character_index + padding
+        # Stores the widened span under its file, along with its rank
         spans_per_file[src.file_path].append((start, end, rank))
+
     result: List[Tuple[str, int, int, int]] = []
     for file_path, spans in spans_per_file.items():
         spans.sort(key=lambda w: w[0])
@@ -112,6 +172,40 @@ def generate_answer(question: str, sources: List[MinimalSource],
                     padding: int = 1500,
                     enum_padding: int = 4000,
                     max_span_chars: int = 3000) -> str:
+    """
+    Generates an answer to a query using retrieved sources.
+
+    This function orchestrates a complete RAG pipeline:
+    1. Selects and prioritizes the top `top_k` sources based on
+       length and file type.
+    2. Determines if the question requires an enumerated list vs
+       a descriptive answer.
+    3. Merges overlapping source ranges into context spans using dynamic
+       padding based on query type.
+    4. Reads source files from disk and compiles a formatted context block,
+       enforcing a maximum character limit.
+    5. Formulates a structured prompt with specific styling rules and calls
+       the LLM.
+
+    Args:
+        question: The user's query string to answer.
+        sources: A list of`MinimalSource` objects retrieved for the query.
+        max_new_tokens: Maximum number of tokens the LLM should generate.
+                        Defaults to 256.
+        top_k: Maximum number of sources to consider during
+               initial selection. Defaults to 6.
+        padding: Standard character padding added around context chunks for
+                 non-enumeration queries. Defaults to 1500.
+        enum_padding: Expanded character padding added around context chunks
+                      for enumeration queries to capture complete lists.
+                      Defaults to 4000.
+        max_span_chars: Hard limit on the character length of any single
+                        extracted snippet. Defaults to 3000.
+
+    Returns:
+        The generated answer string from the LLM, or a fallback status message
+        if no relevant or readable sources are available.
+    """
     sources = select_sources(sources, top_k)
     if not sources:
         return "No relevant sources retrieved."
