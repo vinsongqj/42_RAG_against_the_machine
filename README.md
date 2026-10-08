@@ -16,6 +16,9 @@
     - [5) Generate answers](#5-generate-answers)
     - [6) Optional: Run the HTTP API](#6-optional-run-the-http-api)
   - [Example usage](#example-usage)
+  - [HTTP API](#http-api)
+    - [Starting the server](#starting-the-server)
+    - [Example requests](#example-requests)
   - [System architecture](#system-architecture)
   - [Chunking strategy](#chunking-strategy)
   - [Retrieval method](#retrieval-method)
@@ -262,6 +265,37 @@ The API reads the index from `data/processed`.
     *Do be warned that this will take a long time to generate depending on your device specs.*
 
 [↑ Back to Table of Contents](#rag-against-the-machine)
+
+## HTTP API
+
+The pipeline is also available as a local HTTP API built with [FastAPI](#fastapi) and served by [Uvicorn](#uvicorn). It exposes the same retrieval and generation logic used by the CLI, so results match across both entry points.
+
+Interactive SwaggerUI documentation is auto-generated at `http://127.0.0.1:8000/docs`. Every endpoint below can be tried directly from that page in a browser. The API reads the index from `data/processed`, so run `index` at least once before starting the server. For semantic or hybrid methods, the index must have been built with `--build_semantic True`.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET`  | `/health` | Reports whether the BM25 and semantic indexes are loaded. |
+| `GET`  | `/search` | Returns the retrieved sources for a query. |
+| `GET`  | `/answer` | Returns retrieved sources plus a generated answer. Needs Ollama running. |
+
+### Starting the server
+
+```bash
+uv run python -m src api --host 127.0.0.1 --port 8000
+```
+
+### Example requests
+Using curl:
+```
+# health check
+curl 'http://127.0.0.1:8000/health'
+
+# search
+curl 'http://127.0.0.1:8000/search?query=How+does+vLLM+handle+continuous+batching%3F&k=5&method=hybrid'
+
+# answer
+curl 'http://127.0.0.1:8000/answer?query=What+is+continuous+batching%3F&k=5&method=bm25'
+```
 
 ## System architecture
 
