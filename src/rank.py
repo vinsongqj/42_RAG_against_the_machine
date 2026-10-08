@@ -158,6 +158,7 @@ def reciprocal_rank_fusion(rankings: List[List[MinimalSource]],
     Returns:
         Every source from all list without duplicates, with best match first.
     """
+    # defaultdict initializes missing keys with a default value
     scores: Dict[Tuple[str, int, int], float] = defaultdict(float)
     first_seen: Dict[Tuple[str, int, int], MinimalSource] = {}
 
