@@ -36,6 +36,8 @@
     - [ChromaDB](#chromadb)
     - [tqdm](#tqdm)
     - [Fire](#fire)
+    - [FastAPI](#fastapi)
+    - [Uvicorn](#uvicorn)
   - [Resources](#resources)
     - [Disclosure of AI Usage](#disclosure-of-ai-usage)
 
@@ -44,7 +46,7 @@
 
 **RAG against the machine** is a Retrieval-Augmented Generation [(RAG)](#retrieval-augmented-generation-rag) pipeline that ingests and indexes a provided [corpus](#corpus), retrieves the most relevant snippets for a question, hands them to a small local model (Qwen3-0.6B) to generate a grounded answer, and measures retrieval quality with [recall@k](#recallk).
 
-Implemented features include a CLI built with [Fire](#fire), [BM25](#bm25) keyword search, [semantic embedding](#semantic-embedding) using [ChromaDB](#chromadb), hybrid retrieval using [Reciprocal Rank Fusion](#reciprocal-rank-fusion), query caching and a local HTTP API using FastAPI and Uvicorn.
+Implemented features include a CLI built with [Fire](#fire), [BM25](#bm25) keyword search, [semantic embedding](#semantic-embedding) using [ChromaDB](#chromadb), hybrid retrieval using [Reciprocal Rank Fusion](#reciprocal-rank-fusion), query caching and a local HTTP API using [FastAPI](#fastapi) and [Uvicorn](#uvicorn).
 
 [↑ Back to Table of Contents](#rag-against-the-machine)
 
@@ -609,6 +611,29 @@ if __name__ == "__main__":
     })
 ```
 This allows you to call `index` directly from the CLI using `uv run python -m src index`. Do note that this can only run because `__main__.py` is executed in the module `src`.
+
+[↑ Back to Table of Contents](#rag-against-the-machine)
+
+---
+
+### FastAPI
+FastAPI is a modern high-performance web framework used to define routes, validate inputs and format HTTP responses.
+
+It does:
+- Routing: Maps HTTP methods and paths (e.g. `@app.get("/search)`) to functions.
+- Data validation: Uses Pydantic to automatically validate query parameters, path parameters and JSON request bodies.
+- Automatic Documentation: Generates interactive SwaggerUI docs at `/docs` automatically.
+
+[↑ Back to Table of Contents](#rag-against-the-machine)
+
+---
+
+### Uvicorn
+Uvicorn is an Asynchronous Server Gateway Interface (ASGI) server implementation.
+
+It does:
+- Network handling: Opens TCP sockets and listens on host/port bindings (e.g. `127.0.0.1:8000`).
+- ASGI translation: Takes HTTP network requests and passes them to the FastAPI application using the standard ASGI interface.
 
 [↑ Back to Table of Contents](#rag-against-the-machine)
 
