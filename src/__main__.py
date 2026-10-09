@@ -10,7 +10,7 @@ from functools import wraps
 import json
 from pathlib import Path
 import sys
-from typing import Optional
+from typing import Optional, Any, Callable
 import fire
 from tqdm import tqdm
 from src.api import run_api
@@ -39,7 +39,7 @@ def _fail(message: str, code: int = 1) -> None:
     sys.exit(code)
 
 
-def _cli_guard(func):
+def _cli_guard(func: Callable[..., Any]) -> Callable[..., Any]:
     """
     Decorator that catches runtime exceptions and outputs formatted
     CLI errors.
@@ -52,7 +52,7 @@ def _cli_guard(func):
         of raising tracebacks.
     """
     @wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
             return func(*args, **kwargs)
         except KeyboardInterrupt:
